@@ -1,0 +1,12 @@
+79a50d1c399182b8f1b21b55aa225e97 *DESCRIPTION
+04aa13d1349f83beffcc859309fcaa84 *NAMESPACE
+123020ef91ca82ccc7bc6c6f5226bc14 *R/pre.R
+c5a8f1532333e28da74aac7dd4b0c086 *man/bsnullinteract.Rd
+619c7042e84ed73f99db536d6d3d59f4 *man/coef.pre.Rd
+e56aa09f38217ba90a3feb148411d559 *man/cvpre.Rd
+ce9ded7f89c37d0632f7d83fc2b655f1 *man/importance.Rd
+dbb0d8d2223b40bf40f37b323be36462 *man/interact.Rd
+469bb02428ba0bc9ba0859dad66a5b25 *man/pairplot.Rd
+841ddd66d59a6455f4aa417a87b912d1 *man/pre.Rd
+7d22028306a5f63dd047bac9bb81cc08 *man/predict.pre.Rd
+47537c3001f2a76c41c336d24134bacd *man/singleplot.Rd
