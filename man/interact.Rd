@@ -5,53 +5,76 @@
 \title{Calculate interaction statistics for user-specified variables}
 \usage{
 interact(object, varnames = NULL, nullmods = NULL, k = 10, plot = TRUE,
-  col = c("yellow", "blue"), ylab = "Interaction strength",
-  main = "Interaction test statistics", ...)
+  penalty.par.val = "lambda.1se", col = c("yellow", "blue"),
+  ylab = "Interaction strength", parallel = FALSE,
+  main = "Interaction test statistics", legend = TRUE, verbose = FALSE,
+  ...)
 }
 \arguments{
 \item{object}{an object of class \code{\link{pre}}.}
 
-\item{varnames}{character vector. Names of variables for which interaction 
-statistics should be calculated.}
+\item{varnames}{character vector. Names of variables for which interaction
+statistics should be calculated. If \code{NULL}, interaction statistics for
+all predictor variables with non-zeor coefficients will be calculated (which
+may take a long time).}
 
-\item{nullmods}{object with bootstrapped null interaction models, resulting 
+\item{nullmods}{object with bootstrapped null interaction models, resulting
 from application of \code{bsnullinteract}.}
 
-\item{k}{integer. Calculating interaction test statistics is a computationally 
-intensive, so  calculations are split up in several parts to prevent memory 
+\item{k}{integer. Calculating interaction test statistics is a computationally
+intensive, so  calculations are split up in several parts to prevent memory
 allocation errors. If a memory allocation error still occurs, increase k.}
 
-\item{plot}{logical Should the interaction statistics be plotted?}
+\item{plot}{logical Should interaction statistics be plotted?}
 
-\item{col}{character vector of length two. Color for plotting bars used. Only 
-used when plot = TRUE. Only first element of vector is used if 
+\item{penalty.par.val}{character. Which value of the penalty parameter
+criterion should be used? The value yielding minimum cv error
+(\code{"lambda.min"}) or penalty parameter yielding error within 1 standard
+error of minimum cv error ("\code{lambda.1se}")? Alternatively, a numeric 
+value may be specified, corresponding to one of the values of lambda in the 
+sequence used by glmnet, for which estimated cv error can be inspected by 
+running \code{object$glmnet.fit} and \code{plot(object$glmnet.fit)}.}
+
+\item{col}{character vector of length two. Color for plotting bars used. Only
+used when \code{plot = TRUE}. Only first element of vector is used if
 \code{nullmods = NULL}.}
 
 \item{ylab}{character string. Label to be used for plotting y-axis.}
 
+\item{parallel}{logical. Should parallel foreach be used? Must register
+parallel beforehand, such as doMC or others.}
+
 \item{main}{character. Main title for the bar plot.}
+
+\item{legend}{logical. Should a legend be plotted in the top right corner of the
+barplot?}
+
+\item{verbose}{logical. Should progress information be printed to the
+command line?}
 
 \item{...}{Additional arguments to be passed to \code{barplot}.}
 }
 \value{
-If nullmods is not specified, the function returns the interaction 
-test statistic. If nullmods is specified, the function returns a list, 
-with elements \code{$H}, which is the test statistic of the interaction 
-strength, and \code{$nullH}, which is a vector of test statistics of the 
+If nullmods is not specified, the function returns the interaction
+test statistic. If nullmods is specified, the function returns a list,
+with elements \code{$H}, which is the test statistic of the interaction
+strength, and \code{$nullH}, which is a vector of test statistics of the
 interaction in each of the bootstrapped null interaction models. In the barplot,
-yellow is used for plotting the interaction test statistic. When applicable, 
+yellow is used for plotting the interaction test statistic. When applicable,
 blue is used for the mean in the bootstrapped null models.
 }
 \description{
-\code{interact} calculates a statistic for assessing the presence of 
+\code{interact} calculates test statistics for assessing the strength of
 interactions between the input variable(s) specified, and all other input
 variables.
 }
 \details{
-Can be computationally intensive, especially when nullmods is specified.
+Can be computationally intensive, especially when nullmods is specified,
+in which case setting \verb{parallel = TRUE} may improve speed.
 }
 \examples{
 \donttest{
+ set.seed(42)
  airq.ens <- pre(Ozone ~ ., data=airquality[complete.cases(airquality),])
  interact(airq.ens, c("Temp", "Wind", "Solar.R"))}
 }

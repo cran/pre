@@ -5,11 +5,12 @@
 \title{Derive a prediction rule ensemble}
 \usage{
 pre(formula, data, type = "both", weights = rep(1, times = nrow(data)),
-  sampfrac = 0.5, seed = 42, maxdepth = 3, learnrate = 0.01,
-  removeduplicates = TRUE, maxrules = 2000, mtry = Inf, thres = 1e-07,
-  standardize = FALSE, winsfrac = 0.025, normalize = TRUE, nfolds = 10,
-  mod.sel.crit = "deviance", verbose = TRUE,
-  ctreecontrol = ctree_control(), ...)
+  sampfrac = 0.5, maxdepth = 3L, learnrate = NULL,
+  removeduplicates = TRUE, mtry = Inf, ntrees = 500,
+  removecomplements = TRUE, thres = 1e-07, standardize = FALSE,
+  winsfrac = 0.025, normalize = TRUE, nfolds = 10L,
+  mod.sel.crit = "deviance", verbose = FALSE, par.init = FALSE,
+  par.final = FALSE, ...)
 }
 \arguments{
 \item{formula}{a symbolic description of the model to be fit of the form 
@@ -38,31 +39,30 @@ linear functions only).}
 \item{weights}{an optional vector of observation weights to be used for 
 deriving the ensemble.}
 
-\item{sampfrac}{numeric value greater than 0, and smaller than or equal to 1. 
-Fraction of randomly selected training observations used to produce each tree. 
-Setting this to values < 1 will result in subsamples being drawn without 
-replacement (i.e., subsampling). Setting this equal to 1 will result in 
-bootstrap sampling.}
+\item{sampfrac}{numeric value greater than 0 and smaller than or equal to 1. 
+Fraction of randomly selected training observations used to produce each 
+tree. Values smaller than 1 will result in subsamples being drawn without 
+replacement (i.e., subsampling), value equal to 1 will result in bootstrap 
+sampling.}
 
-\item{seed}{numeric. Random seed to be used in deriving the final ensemble 
-(for reproducability).}
+\item{maxdepth}{numeric. Maximal number of conditions in rules.}
 
-\item{maxdepth}{numeric. Maximal depth of trees to be grown. Defaults to 3,
-resulting in trees with max 15 nodes (8 terminal and 7 inner nodes), and 
-therefore max 15 rules.}
-
-\item{learnrate}{numeric. Learning rate for sequentially induced trees.}
+\item{learnrate}{numeric. Learning rate for sequentially induced trees. If 
+\code{NULL} (default), the learnrate is set to .01 for regression and to 0 
+for classification. Setting the learning rate to values > 0 for classification 
+dramatically increases computation time.}
 
 \item{removeduplicates}{logical. Remove rules from the ensemble which have 
 the exact same support in training data?}
 
-\item{maxrules}{numeric. Approximate maximum number of rules to be generated. 
-The number of rules in the final ensemble will be smaller, due to the omission 
-of rules with identical conditions or support.}
-
 \item{mtry}{numeric. Number of randomly selected predictor variables for 
 creating each split in each tree. Ignored for nominal output variables if
 \code{learnrate} > 0.}
+
+\item{ntrees}{numeric. Number of trees to generate for the initial ensemble.}
+
+\item{removecomplements}{logical. Remove rules from the ensemble which have
+the same support in the training data as the inverse of other rules?}
 
 \item{thres}{numeric. Threshold for convergence.}
 
@@ -83,31 +83,37 @@ as a typical rule.}
 validation for determining penalty parameter.}
 
 \item{mod.sel.crit}{character. Model selection criterion to be used for 
-deriving the final ensemble. The default is \code{type.measure = "deviance"}, 
-which uses squared-error for gaussian models (a.k.a. \code{type.measure = 
-"mse"}). \code{type.measure = "mse"} or \code{type.measure = "mae"} (mean 
-absolute error) measure the deviation from the fitted mean to the response.}
+deriving the final ensemble. The default is \code{"deviance"}, which uses 
+squared-error for gaussian models (a.k.a. \code{"mse"}) and binomial deviance 
+for logistic regression. \code{"class"} would give misclassification error, 
+\code{"auc"} would give area under the ROC curve. Further, \code{"mse"} or 
+\code{"mae"} (mean squared and mean absolute error) would measure the deviation 
+from the fitted mean to the binary or continuous response.}
 
 \item{verbose}{logical. Should information on the initial and final ensemble 
 be printed to the command line?}
 
-\item{ctreecontrol}{A list with control parameters, see 
-\code{link[partykit]{ctree_control}}. Ignored for nominal output variables 
-when \code{learnrate} > 0.}
+\item{par.init}{logical. Should parallel foreach be used to generate initial 
+ensemble? Only used when \verb{learnrate == 0}. Must register parallel 
+beforehand, such as doMC or others.}
+
+\item{par.final}{logical. Should parallel foreach be used to perform cross 
+validation for selecting the final ensemble? Must register parallel beforehand, 
+such as doMC or others.}
 
 \item{...}{Additional arguments to be passed to 
 \code{\link[glmnet]{cv.glmnet}}.}
 }
 \value{
-an object of class \code{pre}, which is a list with many elements
+an object of class \code{pre}
 }
 \description{
 \code{pre} derives a sparse ensemble of rules and/or linear functions for 
 prediction of a continuous or binary outcome.
 }
 \details{
-Inputs can be continuous, ordered or factor variables. Continuous 
-variables
+Inputs can be continuous, ordered or factor variables. Output can be
+continuous or binary categorical.
 }
 \note{
 The code for deriving rules from the nodes of trees was taken from an 
@@ -116,6 +122,6 @@ Hothorn.
 }
 \examples{
 \donttest{
-airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),])}
+airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),], verbose = TRUE)}
 }
 

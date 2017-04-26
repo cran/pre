@@ -1,0 +1,21 @@
+Changes in Version 0.2 (2017-04-25):
+
+  - Added print() and plot() method for objects of class pre.
+  - Added support for using functions like factor() and log() in formula 
+      statement of function pre(). (thanks to Bill Venables for suggesting this)
+  - Added support for parallel computating in functions pre(), cvpre(), 
+      bsnullinteract() and interact(). 
+  - Winsorizing points used for the linear terms are reported in the description 
+      of the base learners returned by coef() and importance(). (Thanks to
+       Rishi Sadhir for suggesting this)
+  - Added README file.
+  - Legend included in plot for interaction test statistics.
+  - Fixed importance() function to allow for selecting final ensemble with 
+	different value than 'lambda.1se'.
+  - Cleaned up all occurrences of set.seed()
+  - Fixed cvpre() function: penalty.par.val argument now included
+  - Minor bug fixes.
+
+Changes in Version 0.1 (2016-12-23):
+
+  - First CRAN release.

@@ -4,8 +4,7 @@
 \alias{coef.pre}
 \title{Coefficients for the final prediction rule ensemble}
 \usage{
-\method{coef}{pre}(object, penalty.par.val = "lambda.1se", print = TRUE,
-  ...)
+\method{coef}{pre}(object, penalty.par.val = "lambda.1se", ...)
 }
 \arguments{
 \item{object}{object of class \code{\link{pre}}}
@@ -13,18 +12,17 @@
 \item{penalty.par.val}{character. Penalty parameter criterion to be used for 
 selecting final model: lambda giving minimum cv error (\code{"lambda.min"}) or 
 lambda giving cv error that is within 1 standard error of minimum cv error 
-("\code{lambda.1se}").}
-
-\item{print}{logical. Should coefficients of the base learners with non-zero 
-coeffcients in the final ensemble be printed to the command line?}
+("\code{lambda.1se}"). Alternatively, a numeric value may be specified, 
+corresponding to one of the values of lambda in the sequence used by glmnet,
+for which estimated cv error can be inspected by running 
+\code{object$glmnet.fit} and \code{plot(object$glmnet.fit)}.}
 
 \item{...}{additional arguments to be passed to \code{\link[glmnet]{coef.glmnet}}.}
 }
 \value{
-returns a dataframe with 3 columns: coefficients, rule (rule or 
+returns a dataframe with 3 columns: coefficient, rule (rule or 
 variable name) and description (\code{NA} for linear terms, conditions for 
-rules). In the command line, the non zero coefficients are printed (when 
-\code{print = TRUE}).
+rules).
 }
 \description{
 \code{coef.pre} returns coefficients for prediction rules and linear terms in 
@@ -32,6 +30,7 @@ the final ensemble
 }
 \examples{
 \donttest{
+set.seed(42)
 airq.ens <- pre(Ozone ~ ., data=airquality[complete.cases(airquality),])
 coefs <- coef(airq.ens)}
 }

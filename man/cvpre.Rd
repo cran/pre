@@ -4,33 +4,41 @@
 \alias{cvpre}
 \title{Full k-fold cross validation of a pre}
 \usage{
-cvpre(object, k = 10, seed = 42, verbose = TRUE, pclass = 0.5)
+cvpre(object, k = 10, verbose = FALSE, pclass = 0.5,
+  penalty.par.val = "lambda.1se", parallel = FALSE)
 }
 \arguments{
 \item{object}{An object of class \code{\link{pre}}.}
 
 \item{k}{integer. The number of cross validation folds to be used.}
 
-\item{seed}{integer. Random seed to be used for generating 
-cross-validation subsamples.}
-
 \item{verbose}{logical. Should progress of the cross validation be printed 
 to the command line?}
 
 \item{pclass}{numeric. Only used for classification. Cut-off value between 
 0 and 1 to be used for classifying to second class.}
+
+\item{penalty.par.val}{character. Calculate cross-validated error for ensembles 
+with penalty parameter criterion giving minimum cv error (\code{"lambda.min"}) 
+or giving cv error that is within 1 standard error of minimum cv error 
+("\code{lambda.1se}")? Alternatively, a numeric value may be specified, 
+corresponding to one of the values of lambda in the sequence used by glmnet,
+for which estimated cv error can be inspected by running 
+\code{object$glmnet.fit} and \code{plot(object$glmnet.fit)}.}
+
+\item{parallel}{logical. Should parallel foreach be used? Must register parallel 
+beforehand, such as doMC or others.}
 }
 \value{
-A list with three elements: cvpreds (a vector with cross-validated
-predicted y values), ss (a vector indicating the cross-validation subsample 
-each training observation was assigned to) and accuracy. For continuous 
-outputs, accuracy is a list with elements MSE (mean squared error on test 
-observations), MAE (mean absolute error on test observations) and 
-cor_true_pred_y, which is the correlation between the actual and predicted 
-outcome variable values. For classification, accuracy is a list with elements 
-SEL (mean squared error on predicted probabilities), AEL (mean absolute 
-error on predicted probabilities), MCR (average misclassification error rate) 
-and table (a table with proportions of (in)correctly classified observations 
+A list with three elements: \code{$cvpreds} (a vector with cross-validated
+predicted y values), \code{$ss} (a vector indicating the cross-validation subsample 
+each training observation was assigned to) and \code{$accuracy}. For continuous 
+outputs, accuracy is a list with elements \code{$MSE} (mean squared error on test 
+observations), \code{$MAE} (mean absolute error on test observations). For 
+classification, accuracy is a list with elements 
+\code{$SEL} (mean squared error on predicted probabilities), \code{$AEL} (mean absolute 
+error on predicted probabilities), \code{$MCR} (average misclassification error rate) 
+and \code{$table} (table with proportions of (in)correctly classified observations 
 per class).
 }
 \description{
@@ -39,6 +47,7 @@ the ensemble, providing an estimate of predictive accuracy on future observation
 }
 \examples{
 \donttest{
+set.seed(42)
 airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),])
 airq.cv <- cvpre(airq.ens)}
 }
