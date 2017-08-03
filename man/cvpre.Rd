@@ -15,8 +15,9 @@ cvpre(object, k = 10, verbose = FALSE, pclass = 0.5,
 \item{verbose}{logical. Should progress of the cross validation be printed 
 to the command line?}
 
-\item{pclass}{numeric. Only used for classification. Cut-off value between 
-0 and 1 to be used for classifying to second class.}
+\item{pclass}{numeric. Only used for classification. Cut-off value for the 
+predicted probabilities that should be used to classify observations to the
+second class.}
 
 \item{penalty.par.val}{character. Calculate cross-validated error for ensembles 
 with penalty parameter criterion giving minimum cv error (\code{"lambda.min"}) 
@@ -30,7 +31,7 @@ for which estimated cv error can be inspected by running
 beforehand, such as doMC or others.}
 }
 \value{
-A list with three elements: \code{$cvpreds} (a vector with cross-validated
+A list with three objects: \code{$cvpreds} (a vector with cross-validated
 predicted y values), \code{$ss} (a vector indicating the cross-validation subsample 
 each training observation was assigned to) and \code{$accuracy}. For continuous 
 outputs, accuracy is a list with elements \code{$MSE} (mean squared error on test 
@@ -51,4 +52,8 @@ set.seed(42)
 airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),])
 airq.cv <- cvpre(airq.ens)}
 }
-
+\seealso{
+\code{\link{pre}}, \code{\link{plot.pre}}, 
+\code{\link{coef.pre}}, \code{\link{importance}}, \code{\link{predict.pre}}, 
+\code{\link{interact}}, \code{\link{print.pre}}
+}

@@ -24,7 +24,7 @@ giving cv error that is within 1 standard error of minimum cv error
 ("lambda.1se"). Alternatively, a numeric value may be specified, 
 corresponding to one of the values of lambda in the sequence used by glmnet,
 for which estimated cv error can be inspected by running 
-\code{object$glmnet.fit} and \code{plot(pbject$glmnet.fit)}.}
+\code{object$glmnet.fit} and \code{plot(object$glmnet.fit)}.}
 
 \item{...}{currently not used.}
 }
@@ -45,4 +45,8 @@ airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),][train,
 predict(airq.ens)
 predict(airq.ens, newdata = airquality[complete.cases(airquality),][-train,])}
 }
-
+\seealso{
+\code{\link{pre}}, \code{\link{plot.pre}}, 
+\code{\link{coef.pre}}, \code{\link{importance}}, \code{\link{cvpre}}, 
+\code{\link{interact}}, \code{\link{print.pre}}
+}

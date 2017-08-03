@@ -4,11 +4,11 @@
 \alias{interact}
 \title{Calculate interaction statistics for user-specified variables}
 \usage{
-interact(object, varnames = NULL, nullmods = NULL, k = 10, plot = TRUE,
-  penalty.par.val = "lambda.1se", col = c("yellow", "blue"),
-  ylab = "Interaction strength", parallel = FALSE,
-  main = "Interaction test statistics", legend = TRUE, verbose = FALSE,
-  ...)
+interact(object, varnames = NULL, nullmods = NULL,
+  penalty.par.val = "lambda.1se", quantprobs = c(0.05, 0.95), plot = TRUE,
+  col = c("yellow", "blue"), ylab = "Interaction strength",
+  main = "Interaction test statistics", se.linewidth = 0.05,
+  parallel = FALSE, k = 10, verbose = FALSE, ...)
 }
 \arguments{
 \item{object}{an object of class \code{\link{pre}}.}
@@ -21,12 +21,6 @@ may take a long time).}
 \item{nullmods}{object with bootstrapped null interaction models, resulting
 from application of \code{bsnullinteract}.}
 
-\item{k}{integer. Calculating interaction test statistics is a computationally
-intensive, so  calculations are split up in several parts to prevent memory
-allocation errors. If a memory allocation error still occurs, increase k.}
-
-\item{plot}{logical Should interaction statistics be plotted?}
-
 \item{penalty.par.val}{character. Which value of the penalty parameter
 criterion should be used? The value yielding minimum cv error
 (\code{"lambda.min"}) or penalty parameter yielding error within 1 standard
@@ -35,19 +29,33 @@ value may be specified, corresponding to one of the values of lambda in the
 sequence used by glmnet, for which estimated cv error can be inspected by 
 running \code{object$glmnet.fit} and \code{plot(object$glmnet.fit)}.}
 
-\item{col}{character vector of length two. Color for plotting bars used. Only
-used when \code{plot = TRUE}. Only first element of vector is used if
-\code{nullmods = NULL}.}
+\item{quantprobs}{numeric vector of length two. Probabilities that should be
+used for plotting the range of bootstrapped null interaction model statistics.
+Only used when \code{nullmods} argument is specified and \code{plot = TRUE}.
+The default yields sample quantiles corresponding to .05 and .95 probabilities.}
+
+\item{plot}{logical. Should interaction statistics be plotted?}
+
+\item{col}{character vector of length one or two. Color for plotting 
+interaction statistics. The first color specified is used to plot the 
+interaction statistic from the training data, the second color specifed
+is used to plot the interaction statistic distribution from the bootstrapped
+null interaction models. Only used when \code{plot = TRUE}. Only the first 
+element of vector is used if \code{nullmods = NULL}.}
 
 \item{ylab}{character string. Label to be used for plotting y-axis.}
+
+\item{main}{character. Main title for the bar plot.}
+
+\item{se.linewidth}{numeric. Width of the whiskers of the plotted standard 
+error bars (in inches).}
 
 \item{parallel}{logical. Should parallel foreach be used? Must register
 parallel beforehand, such as doMC or others.}
 
-\item{main}{character. Main title for the bar plot.}
-
-\item{legend}{logical. Should a legend be plotted in the top right corner of the
-barplot?}
+\item{k}{integer. Calculating interaction test statistics is a computationally
+intensive, so  calculations are split up in several parts to prevent memory
+allocation errors. If a memory allocation error still occurs, increase k.}
 
 \item{verbose}{logical. Should progress information be printed to the
 command line?}
@@ -55,13 +63,35 @@ command line?}
 \item{...}{Additional arguments to be passed to \code{barplot}.}
 }
 \value{
-If nullmods is not specified, the function returns the interaction
-test statistic. If nullmods is specified, the function returns a list,
-with elements \code{$H}, which is the test statistic of the interaction
-strength, and \code{$nullH}, which is a vector of test statistics of the
-interaction in each of the bootstrapped null interaction models. In the barplot,
-yellow is used for plotting the interaction test statistic. When applicable,
-blue is used for the mean in the bootstrapped null models.
+Function \code{interact()} returns and plots interaction statistics
+for the specified predictor variables. If nullmods is not specified, it 
+returns and plots only the interaction test statistics for the specified 
+fitted prediction rule ensemble. If nullmods is specified, the function 
+returns a list, with elements \code{$fittedH2}, containing the interaction
+statistics of the fitted ensemble, and \code{$nullH2}, which contains the
+interaction test statistics for each of the bootstrapped null interaction 
+models.
+ 
+If \code{plot = TRUE} (the default), a barplot is created with the 
+interaction test statistic from the fitted prediction rule ensemble. If 
+\code{nullmods} is specified, bars representing the median of the 
+distribution of interaction test statistics of the bootstrapped null 
+interaction models are plotted. In addition, error bars representing the
+quantiles of the distribution (their value specified by the \code{quantprobs} 
+argument) are plotted. These allow for testing the null hypothesis of no 
+interaction effect for each of the input variables. 
+
+Note that the error rates of null hypothesis tests of interaction effects 
+have not yet been studied in detail, but likely depend on the number of 
+generated bootstrapped null interaction models as well as the complexity of 
+the fitted ensembles. Users are therefore advised to test for the presence 
+of interaction effects by setting the \code{nsamp} argument of the function 
+\code{bsnullinteract} \eqn{\geq 100} (even though this may take a lot of 
+computation time). Also, users are advised to test for the presence of 
+interactions only with fitted ensembles that are neither too sparse nor too 
+complex, that is, ensembles that are selected by setting the 
+\code{penalty.par.val} argument equal to \code{"lambda.min"} or 
+\code{"lambda.1se"}.
 }
 \description{
 \code{interact} calculates test statistics for assessing the strength of
@@ -69,8 +99,8 @@ interactions between the input variable(s) specified, and all other input
 variables.
 }
 \details{
-Can be computationally intensive, especially when nullmods is specified,
-in which case setting \verb{parallel = TRUE} may improve speed.
+Can be computationally intensive, especially when nullmods is 
+specified, in which case setting \verb{parallel = TRUE} may improve speed.
 }
 \examples{
 \donttest{
@@ -78,4 +108,6 @@ in which case setting \verb{parallel = TRUE} may improve speed.
  airq.ens <- pre(Ozone ~ ., data=airquality[complete.cases(airquality),])
  interact(airq.ens, c("Temp", "Wind", "Solar.R"))}
 }
-
+\seealso{
+\code{\link{pre}}, \code{\link{bsnullinteract}}
+}
