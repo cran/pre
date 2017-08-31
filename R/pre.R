@@ -18,19 +18,16 @@ utils::globalVariables("%dopar%")
 #' @param data data.frame containing the variables in the model. Response must
 #' be a factor for binary classification, numeric for (count) regression. Input
 #' variables must be of class numeric, factor or ordered factor.
-#' @param family character. Specification is required only for non-negative 
-#' count responses, by specifying \code{family = "poisson"}. Otherwise, 
-#' \code{family = "gaussian"} is employed if response specified in formula
-#' is numeric and \code{family = "binomial"} is employed if response is a 
-#' binary factor. Note that if \code{family = "poisson"} is specified, 
-#' \code{\link[partykit]{glmtree}} with an intercept only models in the nodes 
-#' will be employed for inducing trees, instead of \code{\link[partykit]{ctree}}. 
-#' Although this yields longer computation times, it also yields better 
-#' accuracy for count outcomes. 
+#' @param family specification of a glm family. Can be a character string (i.e., 
+#' \code{"gaussian"}, \code{"binomial"} or \code{"poisson"}) or a corresponding
+#' family object (see \code{\link[stats]{family}}. Specification is required only 
+#' for non-negative count responses, e.g., \code{family = "poisson"}. Otherwise, 
+#' \code{family = "gaussian"} is employed if response is numeric and 
+#' \code{family = "binomial"} is employed if response is a binary factor. 
 #' @param use.grad logical. Should binary outcomes use gradient boosting with 
 #' regression trees when \code{learnrate > 0}? That is, use 
-#' \code{\link[partykit]{ctree}} as in Friedman (2001) with a second order 
-#' Taylor expansion? By default set to \code{TRUE}, as this yields shorter
+#' \code{\link[partykit]{ctree}} as in Friedman (2001), without the line search. 
+#' By default set to \code{TRUE}, as this yields shorter
 #' computation time. If set to \code{FALSE}, \code{\link[partykit]{glmtree}}
 #' with intercept only models in the nodes will be employed. This will yield
 #' longer computation times (but may increase the likelihood of detecting
@@ -46,7 +43,7 @@ utils::globalVariables("%dopar%")
 #' tree. Values \eqn{< 1} will result in sampling without replacement (i.e., 
 #' subsampling), a value of 1 will result in sampling with replacement 
 #' (i.e., bootstrapping). 
-#' @param maxdepth numeric. Maximum number of conditions that can define a rule.
+#' @param maxdepth positive integer. Maximum number of conditions in a rule.
 #' @param learnrate numeric. Learning rate or boosting parameter.
 #' @param mtry numeric. Number of randomly selected predictor variables for 
 #' creating each split in each tree.
@@ -79,7 +76,8 @@ utils::globalVariables("%dopar%")
 #' validation for selecting the final ensemble? Must register parallel beforehand, 
 #' such as doMC or others.
 #' @param tree.control list with control parameters to be passed to the tree 
-#' fitting function, see \code{\link[partykit]{ctree_control}}.
+#' fitting function, generated using \code{\link[partykit]{ctree_control}}, or 
+#' \code{\link[partykit]{mob_control}} if \code{use.grad = FALSE}.
 #' @param ... Additional arguments to be passed to 
 #' \code{\link[glmnet]{cv.glmnet}}.
 #' @details Obervations with missing values will be removed prior to analysis.
@@ -117,9 +115,10 @@ utils::globalVariables("%dopar%")
 #' \code{\link{coef.pre}}, \code{\link{importance}}, \code{\link{predict.pre}}, 
 #' \code{\link{interact}}, \code{\link{cvpre}} 
 #' @references
-#' Friedman, J. H. (2001). Greedy function approximation: a gradient boosting machine. \emph{The Annals of Applied Statistics, 29}(5), 1189-1232.
+#' Friedman, J. H. (2001). Greedy function approximation: a gradient boosting 
+#' machine. \emph{The Annals of Applied Statistics, 29}(5), 1189-1232.
 #' 
-pre <- function(formula, data, family = c("gaussian", "binomial", "poisson"),
+pre <- function(formula, data, family = gaussian,
                 use.grad = TRUE, weights, type = "both", sampfrac = .5, 
                 maxdepth = 3L, learnrate = .01, mtry = Inf, ntrees = 500, 
                 removecomplements = TRUE, removeduplicates = TRUE, 
@@ -127,43 +126,173 @@ pre <- function(formula, data, family = c("gaussian", "binomial", "poisson"),
                 nfolds = 10L, verbose = FALSE, par.init = FALSE, 
                 par.final = FALSE, tree.control, ...) { 
   
-  ###################
-  ## Preliminaries ##
-  ###################
   
-  if (missing(weights)) {weights <- rep(1, times = nrow(data))}
+  #####################
+  ## Check arguments ##
+  #####################
   
-  if (missing(tree.control)) {
-    tree.control <- ctree_control(maxdepth = maxdepth, mtry = mtry)
+  ## Check if proper formula argument is specified:
+  if (!(class(formula) == "formula" || class(formula)[2] == "Formula")) {
+    stop("Argument 'formula' should specify and object of class 'formula'.")
+  }
+  
+  ## Check if proper data argument is specified:
+  if (!is.data.frame(data)) {
+    stop("Argument 'data' should specify a data frame.")
+  }
+
+  ## Check if proper family argument is specified: 
+  if (is.function(family)) {family <- family()}
+  if (inherits(family, "family")) {
+    link <- family$link
+    family <- family$family
+    if (family == "gaussian" && link != "identity") {
+      warning("The link function specified is currently not supported; identity link will be employed.", immediate. = TRUE)
+    } else if (family == "binomial" && link != "logit") {
+      warning("The link function specified is currently not supported; logit link will be employed.", immediate. = TRUE)
+    } else if (family == "poisson" && link != "log") {
+      warning("The link function specified is currently not supported; log link will be employed.", immediate. = TRUE)
+    }
+  }
+  if (is.character(family)) {
+    if (!(family == "gaussian" || family == "binomial" || family == "poisson" )) {
+      stop("Argument 'family' should be equal to 'gaussian', 'binomial' or 'poisson' or a corresponding family object.")
+    }
   } else {
+    stop("Argument 'family' should be equal to 'gaussian', 'binomial' or 'poisson' or a corresponding family object.")
+  }
+  
+  ## Check if proper use.grad argument is specified:
+  if (!(is.logical(use.grad) && length(use.grad) == 1)) {
+    stop("Argument 'use.grad' should be TRUE or FALSE")
+  } 
+
+  ## Check if proper weights argument is specified, if specified:
+  if (missing(weights)) {
+    weights <- rep(1, times = nrow(data))
+  } else if (length(weights) != nrow(data)) {
+      warning("Length of argument 'weights' is not equal to nrow(data)", 
+            immediate. = TRUE)
+  }
+  
+  ## Check if proper type argument is specified:
+  if (!(length(type) == 1 && (type == "rules" || type == "both" || type == "linear"))) {
+    stop("Argument 'type' should be 'both', 'rules' or 'linear'.")
+  }
+  
+  ## Check if proper sampfrac argument is specified:
+  ## TODO: Allow sampfrac to be a function.  
+  if (!(length(sampfrac) == 1 && 
+        (is.function(sampfrac) || (is.numeric(sampfrac) && 
+                                   (sampfrac > .01 || sampfrac <= 1))))) {
+    stop("Argument 'sampfrac' should be a function, or a single numeric value > 0 and <= 1.")
+  }
+
+  ## Check if proper maxdepth argument is specified:
+  ## TODO: Allow maxdepth to be a random variable.
+  if (!(length(maxdepth) == 1 && maxdepth > 0 && 
+        (maxdepth == suppressWarnings(as.integer(maxdepth)) || 
+         is.infinite(maxdepth)))) {
+    stop("Argument 'maxdepth' should be a single integer value, or Inf.")
+  }
+  
+  ## Check if proper learnrate argument is specified:
+  if (!(length(learnrate) == 1 && is.numeric(learnrate) && 
+        (learnrate >= 0 || learnrate <= 1))) {
+    stop("Argument 'learnrate' shoud be a single numeric value >= 0 and <= 1.")
+  }
+  
+  ## Check if proper mtry argument is specified:
+  if (!(length(mtry) == 1 && mtry > 0 && 
+        (mtry == suppressWarnings(as.integer(mtry)) || is.infinite(mtry)))) {
+    stop("Argument 'mtry' should be a single integer value, or Inf.")
+  }
+  
+  ## Check if proper ntrees argument is specified:
+  if (!(length(ntrees) == 1 && ntrees == as.integer(ntrees) && ntrees > 0)) {
+    stop("Argument 'ntrees' should be a single positive integer.")
+  }
+  
+  ## Check if proper removeduplicates argument is specified:
+  if (!(length(removeduplicates) == 1 && is.logical(removeduplicates))) {
+    stop("Argument 'removeduplicates' should be TRUE or FALSE")
+  }
+  
+  ## Check if proper removecomplements argument is specified:
+  if (!(length(removecomplements) == 1 && is.logical(removecomplements))) {
+    stop("Argument 'removecomplements' should be TRUE or FALSE")
+  }
+
+  ## Check if proper winsfrac argument is specified:
+  if (!(length(winsfrac == 1) && is.numeric(winsfrac) && winsfrac >= 0 && 
+        winsfrac < 1)) {
+    stop("Argument 'winsfrac' should be a numeric value >= 0 and < 1.")
+  }
+
+  ## Check if proper normalize argument is specified:
+  if (!(is.logical(normalize) && length(normalize) == 1)) {
+    stop("Argument 'normalize' should be TRUE or FALSE.")
+  }  
+  
+  ## Check if proper standardize argument is specified:
+  if (!(is.logical(standardize) && length(standardize) == 1)) {
+    stop("Argument 'standardize' should be TRUE or FALSE.")
+  }  
+  
+  ## Check if proper nfolds argument is specified:
+  if (!(length(nfolds) == 1 && is.numeric(nfolds) && nfolds > 0 &&
+        nfolds == as.integer(nfolds))) {
+    stop("Argument 'nfolds' should be a positive integer.")
+  }
+  
+  ## Check if proper par.init and par.final arguments are specified:
+  if (!(is.logical(par.init) && length(par.init) == 1)) {
+    stop("Argument 'par.init' should be TRUE or FALSE.")
+  }
+  if (!(is.logical(par.final) && length(par.final) == 1)) {
+    stop("Argument 'par.final' should be TRUE or FALSE.")
+  }
+  if (par.final || par.init) {
+    if(!requireNamespace("foreach")) {
+      warning("Parallel computation requires package foreach. Arguments 'par.init' and 'par.final' are set to FALSE.")   
+      par.init <- par.final <- FALSE
+    }
+  }
+
+  ## Check if proper tree.control argument is specified:
+  if (missing(tree.control)) {
+    if (use.grad) {
+      tree.control <- ctree_control(maxdepth = maxdepth, mtry = mtry)
+    } else {
+      tree.control <- mob_control(maxdepth = maxdepth + 1, mtry = mtry)
+    }
+  } else {
+    if (!is.list(tree.control)) {
+      stop("Argument 'tree.control' should be a list of control parameters.")
+    }
+    if (use.grad) {
+      if (!all(sort(names(ctree_control())) == sort(names(tree.control)))) {
+        stop("Argument 'tree.control' should be a list containing named elements", 
+             names(ctree_control()))
+      }
+    } else if (!all(sort(names(mob_control())) == sort(names(tree.control)))) {
+      stop("Argument 'tree.control' should be a list containing names elements", 
+           names(mob_control()))
+    }
     tree.control$maxdepth <- maxdepth
     tree.control$mtry <- mtry
   }
   
-  if (par.final) {
-    if (!("foreach" %in% installed.packages()[,1])) {
-      warning("Parallel computation requires package foreach, which is not installed. Argument parallel will be set to FALSE. 
-              To run in parallel, download and install package foreach from CRAN, and run again.")   
-      par.final <- FALSE
-    }
-  }
+  ## Check if proper verbose argument is specified:  
+  if (!(is.logical(verbose) && length(verbose) == 1)) {
+    stop("Argument 'verbose' should be TRUE or FALSE.")
+  }  
   
-  if (!is.data.frame(data)) {stop("Data should be a data frame.")}
   
-  if (!(is.function(sampfrac))) {
-    if (length(sampfrac) != 1 || sampfrac < 0.01 || sampfrac > 1) {
-      stop("Bad value for 'sampfrac'")
-    }
-  }
   
-  if (length(type) != 1 || (type != "rules" & type != "both" & type != "linear")) {
-    stop("Argument type should equal 'both', 'rules' or 'linear'")
-  }
-  
-  if (length(winsfrac) != 1 || winsfrac < 0 || winsfrac > 0.5) {
-    stop("Bad value for 'winsfrac'.")
-  }
-  if (!is.logical(verbose)) {stop("Bad value for 'verbose'.")}  
+  ######################################
+  ## Prepare data, formula and family ##
+  ######################################
   
   ## prepare model frame:
   orig_data <- data
@@ -183,16 +312,16 @@ pre <- function(formula, data, family = c("gaussian", "binomial", "poisson"),
                  "A rule ensemble for prediction of a numeric response will be created.\n",
                  "A rule ensemble for prediction of a binary categorical response will be created.\n"))
     } 
-  } else if (verbose) { # if family is poisson and verbose is TRUE, print message:
+  } else if (verbose) { # if family is poisson:
     cat("A rule ensemble for prediction of a count response will be created.\n")
   }
   
   if (family == "binomial" && (nlevels(data[,y_name]) > 2)) {
-    stop("No support for multinomial responses yet.")
+    stop("Factor response variables with > 2 levels are not (yet) supported.")
   }
   
   if (any(sapply(data[,x_names], is.character))) {
-    stop("Variables specified in formula and data argument are of class character. Coerce to class 'numeric', 'factor' or 'ordered' 'factor':", paste(x_names[sapply(data[,x_names], is.character)], sep = ", "))
+    stop("Variables specified in 'formula' and 'data' argument are of class character. Coerce to class 'numeric', 'factor' or 'ordered' 'factor':", paste(x_names[sapply(data[,x_names], is.character)], sep = ", "))
   }
   
   if (any(is.na(data))) {
@@ -202,20 +331,22 @@ pre <- function(formula, data, family = c("gaussian", "binomial", "poisson"),
     warning("Some observations have missing values and have been removed. New sample size is ", n, ".\n", immediate. = TRUE)
   }
   
+  ## Prepare glmtree arguments if necessary:
+  if (type != "linear" && !use.grad) {
+    glmtree_args <- mob_control(maxdepth = maxdepth + 1, mtry = mtry)
+    glmtree_args$formula <- formula(paste(paste(y_name, " ~ 1 |"), 
+                                         paste(x_names, collapse = "+")))
+    glmtree_args$family <- family
+  }
+    
+
   #############################
   ## Derive prediction rules ##
   #############################
   
   if (type != "linear") {
-    if (family == "poisson" || 
-        (family == "binomial" && !use.grad && learnrate > 0)) {
-      glmtreeformula <- formula(paste(paste(y_name, " ~ 1 |"), 
-                                      paste(x_names, collapse = "+")))
-    }
-    
     if (learnrate == 0) {
-    ## if learnrate == 0, parallel computation with ctree can be used:
-      if (par.init) {
+      if (par.init) { # compute in parallel:
         rules <- foreach::foreach(i = 1:ntrees, .combine = "c", .packages = "partykit") %dopar% {
           # Take subsample of dataset
           if (sampfrac == 1) { # then bootstrap
@@ -225,22 +356,24 @@ pre <- function(formula, data, family = c("gaussian", "binomial", "poisson"),
                                 prob = weights)
           }
           # Grow tree on subsample:
-          if (family != "poisson") {
-            tree <- ctree(formula = formula, data = data[subsample, ], 
-                          control = tree.control)
+          if (use.grad) {
+            if (family == "poisson") {
+              stop("Gradient boosting with a learning rate of zero cannot be used for a poisson response distribution. Either set argument 'use.grad' to FALSE to employ function glmtree() for tree induction, or set argument 'learnrate' to a value >0 to employ function ctree() for tree induction.")
+            } else {
+              tree <- ctree(formula = formula, data = data[subsample, ], 
+                            control = tree.control)
+            }
           } else {
-            tree <- glmtree(glmtreeformula, data = data[subsample, ], 
-                            family = family, maxdepth = maxdepth + 1, 
-                            mtry = mtry)
+            glmtree_args$data <- data[subsample, ]
+            tree <- do.call(glmtree, args = glmtree_args)
           }
           # Collect rules from tree:
           rules <- c(rules, list.rules(tree))
         }
-      ## if (learnrate == 0 && !par.init), use ctree in a standard for loop:
       } else { # do not compute in parallel:
         rules <- c()
         for(i in 1:ntrees) {
-          # Take subsample of dataset
+          # Take subsample of dataset:
           if (sampfrac == 1) { # then bootstrap
             subsample <- sample(1:n, size = n, replace = TRUE, prob = weights)
           } else if (sampfrac < 1) { # else subsample
@@ -248,32 +381,49 @@ pre <- function(formula, data, family = c("gaussian", "binomial", "poisson"),
                                 prob = weights)
           }
           # Grow tree on subsample:
-          if (family == "poisson") {
-            tree <- glmtree(glmtreeformula, data = data[subsample, ], family = family, 
-                            maxdepth = maxdepth + 1, mtry = mtry)
+          if (use.grad) {
+            if (family == "poisson") {
+              stop("Gradient boosting with a learning rate of zero cannot be used for a poisson response distribution. Either set argument 'use.grad' to FALSE to employ function glmtree() for tree induction, or set argument 'learnrate' to a value >0 to employ function ctree() for tree induction.")
+            } else {
+              tree <- ctree(formula = formula, data = data[subsample, ], 
+                            control = tree.control)
+            }
           } else {
-            tree <- ctree(formula = formula, data = data[subsample, ], 
-                          control = tree.control)
+            glmtree_args$data <- data[subsample, ]
+            tree <- do.call(glmtree, args = glmtree_args)
           }
           # Collect rules from tree:
           rules <- c(rules, list.rules(tree))
         }
       }
-    }
-    
-    ## If learnrate > 0, induce trees sequentially (no parallel computation):
-    if (learnrate > 0) {
-      rules <- c()
+    } else { # learnrate > 0, no parallel computation possible:
       
-      if (family == "gaussian" || (family == "binomial" && use.grad)) { ## use ctrees with y_learn:
+      rules <- c() # initialize with empty rule vector
+      
+      if (use.grad) { ## use ctrees with y_learn and eta:
+        
         data_with_y_learn <- data
-        if (family == "binomial") {
+        
+        ## set initial eta value:
+        if (family == "gaussian") {
+          y <- data[[y_name]]
+          eta_0 <- weighted.mean(y, weights)
+          eta <- rep(eta_0, length(y))
+          data_with_y_learn[[y_name]] <- y - eta
+        } else if (family == "binomial") {
           y <- data[[y_name]] == levels(data[[y_name]])[1]
           eta_0 <- get_intercept_logistic(y, weights)
           eta <- rep(eta_0, length(y))
           p_0 <- 1 / (1 + exp(-eta))
           data_with_y_learn[[y_name]] <- ifelse(y, log(p_0), log(1 - p_0))
+        } else if (family == "poisson") {
+          y <- data[[y_name]] 
+          eta_0 <- get_intercept_count(y, weights)
+          eta <- rep(eta_0, length(y))
+          data_with_y_learn[[y_name]] <- y - exp(eta)
         }
+        
+        ## grow trees:
         for(i in 1:ntrees) {
           # Take subsample of dataset:
           if (sampfrac == 1) { # then bootstrap
@@ -287,18 +437,27 @@ pre <- function(formula, data, family = c("gaussian", "binomial", "poisson"),
                         data = data_with_y_learn[subsample, ])
           # Collect rules from tree:
           rules <- c(rules, list.rules(tree))
-          # Substract predictions from current y:
+          
+          ## Update eta and y_learn:
           if (family == "gaussian") {
-            data_with_y_learn[[y_name]] <- data_with_y_learn[[y_name]] - 
-              learnrate * predict(tree, newdata = data)
-          } else { ## family is binomial
+            eta <- eta + learnrate * predict(tree, newdata = data)
+            data_with_y_learn[[y_name]] <- y - eta
+          } else if ( family == "binomial") {
             eta <- eta + learnrate * predict(tree, newdata = data)
             data_with_y_learn[[y_name]] <- get_y_learn_logistic(eta, y)
+          } else if (family == "poisson") {
+            eta <- eta + learnrate * predict(tree, newdata = data)
+            data_with_y_learn[[y_name]] <- get_y_learn_count(eta, y)
           }
         }
         
-      } else { ## use glmtrees with offset: 
-        data_with_offset <- data.frame(data, offset = 0)
+      } else { ## use.grad = FALSE, so use glmtrees with offset:
+        
+        ## initialize with 0 offset:
+        #glmtree_args$data <- data.frame(data)
+        #glmtree_args$
+        offset <- rep(0, times = nrow(data))
+
         for(i in 1:ntrees) {
           # Take subsample of dataset:
           if (sampfrac == 1) { # then bootstrap
@@ -307,16 +466,16 @@ pre <- function(formula, data, family = c("gaussian", "binomial", "poisson"),
             subsample <- sample(1:n, size = round(sampfrac * n), replace = FALSE, 
                                 prob = weights)
           }
-          subsampledata <- data_with_offset[subsample,]
+          glmtree_args$data <- data[subsample,]
+          glmtree_args$offset <- offset[subsample] 
           # Grow tree on subsample:
-          tree <- glmtree(glmtreeformula, data = subsampledata, family = family, 
-                          maxdepth = maxdepth + 1, mtry = mtry, offset = offset)
+          tree <- do.call(glmtree, args = glmtree_args)
           # Collect rules from tree:
           rules <- c(rules, list.rules(tree))
-          # Update offset (note that dataset without offset is, and should be, employed for prediction):
+          # Update offset (note: do not use a dataset which includes the offset for prediction!):
           if (learnrate > 0) {
-            data_with_offset$offset <- data_with_offset$offset + 
-              learnrate * predict(tree, newdata = data, type = "link")
+            offset <- offset + 
+              learnrate * suppressWarnings(predict(tree, newdata = data, type = "link"))
           }
         }
       }
@@ -401,9 +560,12 @@ pre <- function(formula, data, family = c("gaussian", "binomial", "poisson"),
   
   if (type == "linear") {rules <- rulevars <- NULL}
   
-  ######################################################
-  ## Prepare rules, linear terms and outcome variable ##
-  ######################################################
+  
+  
+  
+  ########################################################################
+  ## Prepare rules, linear terms, outcome variable and perform election ##
+  ########################################################################
   
   if (type == "rules" && length(rules) == 0) {
     warning("No prediction rules could be derived from dataset.")
@@ -429,11 +591,7 @@ pre <- function(formula, data, family = c("gaussian", "binomial", "poisson"),
   if (!(length(unique(colnames(x))) == length(colnames(x)))) { 
     warning("There are variables in the model with overlapping variable names. Rename variables and rerun the analysis. See 'Details' under ?pre.") 
   } 
-  
-  ##################################################
-  ## Perform penalized regression on the ensemble ##
-  ##################################################
-  
+
   glmnet.fit <- cv.glmnet(x, y, nfolds = nfolds, weights = weights, 
                           family = family, parallel = par.final, 
                           standardize = standardize, ...)
@@ -550,16 +708,16 @@ get_modmat <- function(
     # normalize numeric variables:
     if (normalize) { 
       # Normalize linear terms (section 5 of F&P08), if there are any:
-      needs_scalling <- x_names[sapply(data[x_names], # use data as it is un-transformed 
+      needs_scaling <- x_names[sapply(data[x_names], # use data as it is un-transformed 
                                        is.numeric)]
-      needs_scalling <- which(colnames(x) %in% x_names)
-      if (length(needs_scalling) > 0) {
-        if(is.null(x_scales))
+      needs_scaling <- which(colnames(x) %in% x_names)
+      if (length(needs_scaling) > 0) {
+        if (is.null(x_scales)) {
           x_scales <- apply(
-            x[, needs_scalling, drop = FALSE], 2, sd, na.rm = TRUE) / 0.4
-        
-        x[, needs_scalling] <- scale(
-          x[, needs_scalling, drop = FALSE], center = FALSE, scale = x_scales)
+            x[, needs_scaling, drop = FALSE], 2, sd, na.rm = TRUE) / 0.4
+        }
+        x[, needs_scaling] <- scale(
+          x[, needs_scaling, drop = FALSE], center = FALSE, scale = x_scales)
       }
     }
   }
@@ -572,6 +730,7 @@ get_modmat <- function(
   list(x = x, y = y, modmat_formula = modmat_formula, 
        x_scales = x_scales, wins_points = wins_points)
 }
+
 
 
 #' Print method for objects of class pre
@@ -605,6 +764,23 @@ get_modmat <- function(
 #' \code{\link{interact}}, \code{\link{cvpre}} 
 print.pre <- function(x, penalty.par.val = "lambda.1se", 
                       digits = getOption("digits"), ...) {
+  
+  if (!(class(x) == "pre" || class(x) == "gpe")) {
+    stop("Argument 'x' should be of class 'pre'.")
+  }
+  
+  if (!(length(penalty.par.val) == 1)) {
+    stop("Argument 'penalty.par.val' should be a vector of length 1.")
+  } else if (!(penalty.par.val == "lambda.min" || 
+               penalty.par.val == "lambda.1se" || 
+               (is.numeric(penalty.par.val) && penalty.par.val >= 0))) {
+    stop("Argument 'penalty.par.val' should be equal to 'lambda.min', 'lambda.1se' or a numeric value >= 0.")
+  }
+  
+  if (!(length(digits) == 1 && digits == as.integer(digits))) {
+    stop("Argument 'digits' should be a single integer.")
+  }
+  
   # function to round values:
   rf <- function(x)
     signif(x, digits)
@@ -684,6 +860,42 @@ print.pre <- function(x, penalty.par.val = "lambda.1se",
 #' \code{\link{interact}}, \code{\link{print.pre}} 
 cvpre <- function(object, k = 10, verbose = FALSE, pclass = .5, 
                   penalty.par.val = "lambda.1se", parallel = FALSE) {
+  
+  ## check if proper object argument is specified:
+  if(class(object) != "pre") {
+    stop("Argument 'object' should supply an object of class 'pre'")
+  }
+  
+  ## Check if proper k argument is specified:  
+  if (!(is.numeric(k) && length(k) == 1 && k == as.integer(k))) {
+    stop("Argument 'k' should be a single positive integer.")
+  }  
+  
+  ## Check if proper verbose argument is specified:  
+  if (!(is.logical(verbose) && length(verbose) == 1)) {
+    stop("Argument 'verbose' should be TRUE or FALSE.")
+  }  
+  
+  ## check if pclass is a numeric vector of length 1, and <= 1 and > 0
+  if (!(is.numeric(pclass) && length(pclass) == 1 && pclass <= 1 && pclass > 0)) {
+    stop("Argument 'verbose' should be TRUE or FALSE.")
+  }  
+  
+  ## check if proper penalty.par.val argument is specified:
+  if (!(length(penalty.par.val) == 1)) {
+    stop("Argument 'penalty.par.val' should be a vector of length 1.")
+  } else if (!(penalty.par.val == "lambda.min" || 
+               penalty.par.val == "lambda.1se" || 
+               (is.numeric(penalty.par.val) && penalty.par.val >= 0))) {
+    stop("Argument 'penalty.par.val' should be equal to 'lambda.min', 'lambda.1se' or a numeric value >= 0")
+  }
+  
+  ## check if proper parallel argument is specified:
+  if (!(is.logical(parallel) && length(parallel) == 1)) {
+    stop("Argument 'parallel' should be TRUE or FALSE")
+  }
+  
+  
   folds <- sample(rep(1:k, length.out = nrow(object$orig_data)), 
                   size = nrow(object$orig_data), replace = FALSE)
   if (parallel) {
@@ -787,6 +999,21 @@ cvpre <- function(object, k = 10, verbose = FALSE, pclass = .5,
 #' \code{\link{interact}}, \code{\link{print.pre}} 
 coef.pre <- function(object, penalty.par.val = "lambda.1se", ...)
 {
+  
+  ## check if proper object argument is specified:
+  if(class(object) != "pre") {
+    stop("Argument 'object' should supply an object of class 'pre'")
+  }
+
+  ## check if proper penalty.par.val argument is specified:
+  if (!(length(penalty.par.val) == 1)) {
+    stop("Argument 'penalty.par.val' should be a vector of length 1.")
+  } else if (!(penalty.par.val == "lambda.min" || 
+               penalty.par.val == "lambda.1se" || 
+               (is.numeric(penalty.par.val) && penalty.par.val >= 0))) {
+    stop("Argument 'penalty.par.val' should be equal to 'lambda.min', 'lambda.1se' or a numeric value >= 0")
+  }
+  
   coefs <- as(coef.glmnet(object$glmnet.fit, s = penalty.par.val, ...), 
               Class = "matrix")
   # coefficients for normalized variables should be unnormalized: 
@@ -824,6 +1051,9 @@ coef.pre <- function(object, penalty.par.val = "lambda.1se", ...)
   }
   return(coefs[order(abs(coefs$coefficient), decreasing = TRUE),])
 }
+
+
+
 
 #' Predicted values based on final unbiased prediction rule ensemble
 #'
@@ -863,9 +1093,31 @@ coef.pre <- function(object, penalty.par.val = "lambda.1se", ...)
 predict.pre <- function(object, newdata = NULL, type = "link",
                         penalty.par.val = "lambda.1se", ...)
 {
+  ## Check if proper object argument is specified:
+  if(class(object) != "pre") {
+    stop("Argument 'object' should supply an object of class 'pre'")
+  }
+  
+  ## check if proper type argument is specified:
+  if (!(length(type) == 1 && is.character(type))) {
+    stop("Argument 'type' should be a character vector of length 1")
+  }
+  
+  ## check if proper penalty.par.val argument is specified:
+  if (!(length(penalty.par.val) == 1)) {
+    stop("Argument 'penalty.par.val' should be a vector of length 1.")
+  } else if (!(penalty.par.val == "lambda.min" || 
+               penalty.par.val == "lambda.1se" || 
+               (is.numeric(penalty.par.val) && penalty.par.val >= 0))) {
+    stop("Argument 'penalty.par.val' should be equal to 'lambda.min', 'lambda.1se' or a numeric value >= 0")
+  }
+  
+
   if (is.null(newdata)) {
     newdata <- object$modmat
   } else {
+
+    ## check if proper newdata argument is specified, if specified:    
     if (!is.data.frame(newdata)) {
       stop("newdata should be a data frame.")
     }
@@ -878,6 +1130,12 @@ predict.pre <- function(object, newdata = NULL, type = "link",
     winsfrac <- (object$call)$winsfrac
     if(is.null(winsfrac))
       winsfrac <- formals(pre)$winsfrac
+    
+    ## Add temporary response variable to prevent errors using get_modmat():
+    if (!(object$y_name %in% names(newdata))) {
+      newdata[, object$y_name] <- 0
+    }
+    
     tmp <- get_modmat(
       modmat_formula = object$modmat_formula, 
       wins_points = object$wins_points, 
@@ -896,8 +1154,8 @@ predict.pre <- function(object, newdata = NULL, type = "link",
   }
   
   # Get predictions:
-  preds <- predict.cv.glmnet(object$glmnet.fit, newx = newdata, s = penalty.par.val,
-                             type = type)[,1]
+  preds <- predict.cv.glmnet(object$glmnet.fit, newx = newdata, 
+                             s = penalty.par.val, type = type)[,1]
   return(preds)
 }
 
@@ -953,17 +1211,42 @@ predict.pre <- function(object, newdata = NULL, type = "link",
 singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
                        nvals = NULL, type = "response", ...)
 {
-  # preliminaries:
-  if (length(varname) != 1) {
-    stop("A partial dependence plot should be requested for 1 variable")
+ 
+  ## Check if proper object argument is specified: 
+  if(class(object) != "pre") {
+    stop("Argument 'object' should be an object of class 'pre'")
   }
-  if (!is.character(varname)) {
-    stop("Specified varname should be of mode character")
+  
+  ## Check if proper varname argument is specified: 
+  if (!(length(varname) == 1 && is.character(varname))) {
+    stop("Argument 'varname' should be a character vector of length 1.")
+  } else if (!(varname %in% object$x_names)) {
+    stop("Argument 'varname' should specify a variable used to generate the ensemble.")
   }
-  if (is.factor(object$orig_data[,varname]) & !is.null(nvals)) {
-    warning("Plot is requested for variable of class factor. Value specified for
-            nvars will be ignored.", immediate. = TRUE)
-    nvals <- NULL
+  
+  ## Check if proper penalty.par.val argument is specified: 
+  if (!(length(penalty.par.val) == 1)) {
+    stop("Argument 'penalty.par.val' should be a vector of length 1.")
+  } else if (!(penalty.par.val == "lambda.min" || 
+               penalty.par.val == "lambda.1se" || 
+               (is.numeric(penalty.par.val) && penalty.par.val >= 0))) {
+    stop("Argument 'penalty.par.val' should be equal to 'lambda.min', 'lambda.1se' or a numeric value >= 0")
+  }
+  
+  ## Check if proper nvals argument is specified: 
+  if (!is.null(nvals)) {
+    if(!(length(nvals) == 1 && nvals == as.integer(nvals))) {
+      stop("Argument 'nvals' should be an integer vector of length 1.")
+    } else if (is.factor(object$orig_data[,varname]) && !is.null(nvals)) {
+      warning("Plot is requested for variable of class factor. Value specified for
+              nvals will be ignored.", immediate. = TRUE)
+      nvals <- NULL
+    }
+  }
+  
+  ## Check if proper type argument is specified: 
+  if (!(length(type) == 1 && is.character(type))) {
+    stop("Argument 'type' should be a single character string.")
   }
   
   # Generate expanded dataset:
@@ -1047,24 +1330,56 @@ singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
 #' @import graphics
 #' @export
 #' @seealso \code{\link{pre}}, \code{\link{singleplot}} 
-pairplot <- function(object, varnames, type = "both",
+pairplot <- function(object, varnames, type = "both", 
                      penalty.par.val = "lambda.1se", 
                      nvals = c(20, 20), pred.type = "response", ...)
 {
-  # preliminaries:
-  if (!("akima" %in% installed.packages()[,1])) {
+  
+  ## Check if proper object argument is specified: 
+  if(class(object) != "pre") {
+    stop("Argument 'object' should be an object of class 'pre'")
+  }
+  
+  ## Check if proper varnames argument is specified: 
+  if (!(length(varnames) == 2 && is.character(varnames))) {
+    stop("Argument 'varnames' should be a character vector of length 2")
+  } else if (!(all(varnames %in% object$x_names))) {
+    stop("Argument 'varnames' should specify names of variables used to generate the ensemble.")
+  } else if (any(sapply(object$orig_data[,varnames], is.factor))) {
+    stop("3D partial dependence plots are currently not supported for factors.")
+  }
+  
+  ## Check if proper penalty.par.val argument is specified: 
+  if (!(length(penalty.par.val) == 1)) {
+    stop("Argument 'penalty.par.val' should be a vector of length 1.")
+  } else if (!(penalty.par.val == "lambda.min" || 
+               penalty.par.val == "lambda.1se" || 
+               (is.numeric(penalty.par.val) && penalty.par.val >= 0))) {
+    stop("Argument 'penalty.par.val' should be equal to 'lambda.min', 'lambda.1se' or a numeric value >= 0")
+  }
+  
+  ## Check if proper nvals argument is specified: 
+  if (!(length(nvals) == 2 && nvals == as.integer(nvals))) {
+    stop("Argument 'nvals' should be an integer vector of length 2.")
+  }
+  
+  ## Check if proper type argument is specified: 
+  if (!(length(type) == 1 && is.character(type))) {
+    stop("Argument 'type' should be equal to 'heatmap', 'contour', 'both' or 'perspective'.")
+  }
+  
+  ## Check if proper pred.type argument is specified: 
+  if (!(length(type) == 1 && is.character(type))) {
+    stop("Argument 'type' should be a single character string.")
+  }
+  
+  ## check if pakcage akima is installed:
+  if (!(requireNamespace("akima"))) {
     stop("Function pairplot requires package akima. Download and install package
          akima from CRAN, and run again.")
   }
-  if (length(varnames) != 2) {
-    stop("Partial dependence should be requested for 2 variables.")
-  }
-  if (!is.character(varnames)) {
-    stop("Specified varname should be of mode character.")
-  }
-  if (any(sapply(object$orig_data[,varnames], is.factor))) {
-    stop("3D partial dependence plots are currently not supported for factors.")
-  }
+
+
   # generate expanded dataset:
   if (is.null(nvals)){
     newx1 <- unique(object$orig_data[,varnames[1]])
@@ -1093,8 +1408,11 @@ pairplot <- function(object, varnames, type = "both",
                        pred_vals, duplicate = "mean")
   if (type == "heatmap" || type == "both") {
     if (is.null(match.call()$col)) {
+      colors <- rev(c("#D33F6A", "#D95260", "#DE6355", "#E27449", "#E6833D", 
+               "#E89331", "#E9A229", "#EAB12A", "#E9C037", "#E7CE4C", 
+               "#E4DC68", "#E2E6BD"))
       image(xyz, xlab = varnames[1], ylab = varnames[2], 
-            col = rev(grDevices::heat.colors(12)), ...)
+            col = colors, ...)
     } else {
       image(xyz, xlab = varnames[1], ylab = varnames[2], ...)
     }
@@ -1357,10 +1675,10 @@ importance <- function(object, standardize = FALSE, global = TRUE,
 #' @param verbose logical. should progress be printed to the command line?
 #' @return A list of length \code{nsamp} with null interaction datasets, to be
 #' used as input for \code{\link{interact}}.
-#' @examples \donttest{
-#' set.seed(42)
+#' @examples \donttest{set.seed(42)
 #' airq.ens <- pre(Ozone ~ ., data=airquality[complete.cases(airquality),])
-#' nullmods <- bsnullinteract(airq.ens)}
+#' nullmods <- bsnullinteract(airq.ens)
+#' interact(airq.ens, nullmods = nullmods, col = c("#7FBFF5", "#8CC876"))}
 #' @details Computationally intensive. Progress info is printed to command line.
 #' @export
 #' @seealso \code{\link{pre}}, \code{\link{interact}} 
@@ -1372,7 +1690,7 @@ bsnullinteract <- function(object, nsamp = 10, parallel = FALSE,
     stop("bsnullinteract is not yet available for categorical outcomes.")
   }
   if(parallel) {
-    if (!("foreach" %in% installed.packages()[,1])) {
+    if (!(requireNamespace("foreach"))) {
       warning("Parallel computation of function bsnullinteract() requires package foreach,
               which is currently not installed. Argument parallel will be set to FALSE.
               To run in parallel, download and install package foreach from CRAN, and run again.")
@@ -1444,7 +1762,7 @@ bsnullinteract <- function(object, nsamp = 10, parallel = FALSE,
     if (verbose) cat("done!\n")
   }
   return(bs.ens)
-  }
+}
 
 
 
@@ -1517,12 +1835,11 @@ Hsquaredj <- function(object, varname, k = 10, penalty.par.val = NULL, verbose =
 #' Only used when \code{nullmods} argument is specified and \code{plot = TRUE}.
 #' The default yields sample quantiles corresponding to .05 and .95 probabilities.  
 #' @param plot logical. Should interaction statistics be plotted?
-#' @param col character vector of length one or two. Color for plotting 
-#' interaction statistics. The first color specified is used to plot the 
-#' interaction statistic from the training data, the second color specifed
-#' is used to plot the interaction statistic distribution from the bootstrapped
-#' null interaction models. Only used when \code{plot = TRUE}. Only the first 
-#' element of vector is used if \code{nullmods = NULL}.
+#' @param col character vector of length one or two. The first value specifies 
+#' the color to be used for plotting the interaction statistic from the training
+#' data, the second color is used for plotting the interaction statistic from 
+#' the bootstrapped null interaction models. Only used when \code{plot = TRUE} 
+#' and Only the first element is used if \code{nullmods = NULL}.
 #' @param ylab character string. Label to be used for plotting y-axis.
 #' @param main character. Main title for the bar plot.
 #' @param  se.linewidth numeric. Width of the whiskers of the plotted standard 
@@ -1565,24 +1882,19 @@ Hsquaredj <- function(object, varname, k = 10, penalty.par.val = NULL, verbose =
 #' generated bootstrapped null interaction models as well as the complexity of 
 #' the fitted ensembles. Users are therefore advised to test for the presence 
 #' of interaction effects by setting the \code{nsamp} argument of the function 
-#' \code{bsnullinteract} \eqn{\geq 100} (even though this may take a lot of 
-#' computation time). Also, users are advised to test for the presence of 
-#' interactions only with fitted ensembles that are neither too sparse nor too 
-#' complex, that is, ensembles that are selected by setting the 
-#' \code{penalty.par.val} argument equal to \code{"lambda.min"} or 
-#' \code{"lambda.1se"}.  
+#' \code{bsnullinteract} \eqn{\geq 100}.
 #' @export
 #' @seealso \code{\link{pre}}, \code{\link{bsnullinteract}} 
 interact <- function(object, varnames = NULL, nullmods = NULL, 
                      penalty.par.val = "lambda.1se", quantprobs = c(.05, .95),
-                     plot = TRUE, col = c("yellow", "blue"), 
+                     plot = TRUE, col = c("#8CC876", "#7FBFF5"), 
                      ylab = "Interaction strength", 
                      main = "Interaction test statistics", 
                      se.linewidth = .05,
                      parallel = FALSE, k = 10, verbose = FALSE, ...) {
   # Preliminaries:
   if(parallel) {
-    if (!("foreach" %in% installed.packages()[,1])) {
+    if (!(requireNamespace("foreach"))) {
       warning("Parallel computating of function bsnullinteract() requires package foreach,
               which is currently not installed. Argument parallel will be set to FALSE.
               To run in parallel, download and install package foreach from CRAN, and run again.")
@@ -1692,9 +2004,7 @@ interact <- function(object, varnames = NULL, nullmods = NULL,
 #' resulting in all terms of the final ensemble to be plotted.
 #' @param plot.dim integer vector of length two. Specifies the number of rows
 #' and columns in the plot. The default yields a plot with three rows and three 
-#' columns, depicting nine baselearners per plot. If 
-#' \code{nterms > plot.dim[1] * plot.dim[2]}, multiple plotting pages will be 
-#' created.
+#' columns, depicting nine baselearners per plotting page.
 #' @param ask logical. Should user be prompted before starting a new page of
 #' plots?
 #' @param exit.label character string. Label to be printed in nodes to which 
@@ -1713,12 +2023,13 @@ interact <- function(object, varnames = NULL, nullmods = NULL,
 plot.pre <- function(x, penalty.par.val = "lambda.1se", linear.terms = TRUE, 
                      nterms = NULL, ask = FALSE, exit.label = "0", 
                      standardize = FALSE, plot.dim = c(3, 3), ...) {
-  # Preliminaries:
-  if (!("grid" %in% installed.packages()[,1])) {
+  ## Preliminaries:
+  if (!(requireNamespace("grid"))) {
     stop("Function plot.pre requires package grid. Download and install package
          grid from CRAN, and run again.")
   }
-  # Get nonzero terms from final ensemble:
+
+  ## Get nonzero terms:
   nonzeroterms <- importance(x, plot = FALSE, global = TRUE, 
                              penalty.par.val = penalty.par.val, 
                              standardize = standardize)$baseimps
@@ -1729,14 +2040,15 @@ plot.pre <- function(x, penalty.par.val = "lambda.1se", linear.terms = TRUE,
     nonzeroterms <- nonzeroterms[1:nterms,]
   }
 
+  ## Grab baselearner components:
   conditions <- list()
   for(i in 1:nrow(nonzeroterms)) { # i is a counter for terms
     if (length(grep("&", nonzeroterms$description[i], )) > 0) { # get rules with multiple conditions:
       conditions[[i]] <- unlist(strsplit(nonzeroterms$description[i], split = " & "))
     } else if (!grepl("rule", nonzeroterms$rule[i])) {
-      conditions[[i]] <- "linear" # flag linear terms:
+      conditions[[i]] <- "linear" # flags linear terms
     } else {
-      conditions[[i]] <- nonzeroterms$description[i] # get rules with only one condition:
+      conditions[[i]] <- nonzeroterms$description[i] # gets rules with only one condition
     }
   }
   
@@ -1747,9 +2059,12 @@ plot.pre <- function(x, penalty.par.val = "lambda.1se", linear.terms = TRUE,
   nonzeroterms$rowno <- rep(rep(1:plot.dim[1], each = plot.dim[2]), length.out = nrow(nonzeroterms))
   nonzeroterms$colno <- rep(rep(1:plot.dim[2], times = plot.dim[1]), length.out = nrow(nonzeroterms))
   
-  # Generate a plot for every term:
+  ## Generate a plot for every baselearner:
   for(i in 1:nrow(nonzeroterms)) {
-    if (conditions[[i]][1] == "linear") { # create plot for linear terms:
+    if (conditions[[i]][1] == "linear") { 
+      
+      ## Plot linear term:
+      
       ## Open new plotting page if needed:
       if (nonzeroterms$rowno[i] == 1 && nonzeroterms$rowno[i] == 1) {
         grid::grid.newpage()
@@ -1764,114 +2079,140 @@ plot.pre <- function(x, penalty.par.val = "lambda.1se", linear.terms = TRUE,
                              "\n\n Importance = ", round(nonzeroterms$imp[i], digits = 3)),
                       gp = grid::gpar(...))
       grid::popViewport()
-    } else { # create plot for rules:
+      
+    } else { 
+      
+      ## Otherwise, plot rule:
+      
       # Create lists of arguments and operators for every condition:
-      tmp <- list()
-      # check whether ?plot.the operator is " < ", " <= " or "%in%  "
-      # split the string using the operator, into the variable name and splitting value, which is used to define split = partysplit(id, value)
+      cond <- list()
+      # check whether the operator is " < ", " <= " or "%in%  "
+      # split the string using the operator, into the variable name and splitting value, 
+      # which is used to define split = partysplit(id, value)
       # make it a list:
       for (j in 1:length(conditions[[i]])) {
+        ## TODO: see get_conditions() function below for improving this code:
         condition_j <- conditions[[i]][[j]]
-        tmp[[j]] <- character()
+        cond[[j]] <- character()
         if (length(grep(" > ", condition_j)) > 0) {
-          tmp[[j]][1] <- unlist(strsplit(condition_j, " > "))[1]
-          tmp[[j]][2] <- " > "
-          tmp[[j]][3] <- unlist(strsplit(condition_j, " > "))[2]
+          cond[[j]][1] <- unlist(strsplit(condition_j, " > "))[1]
+          cond[[j]][2] <- " > "
+          cond[[j]][3] <- unlist(strsplit(condition_j, " > "))[2]
         }
         if (length(grep(" <= ", condition_j)) > 0) {
-          tmp[[j]][1] <- unlist(strsplit(condition_j, " <= "))[1]
-          tmp[[j]][2] <- " <= "
-          tmp[[j]][3] <- unlist(strsplit(condition_j, " <= "))[2]
+          cond[[j]][1] <- unlist(strsplit(condition_j, " <= "))[1]
+          cond[[j]][2] <- " <= "
+          cond[[j]][3] <- unlist(strsplit(condition_j, " <= "))[2]
         }
         if (length(grep(" %in% ", condition_j)) > 0) {
-          tmp[[j]][1] <- unlist(strsplit(condition_j, " %in% "))[1]
-          tmp[[j]][2] <- " %in% "
-          tmp[[j]][3] <- unlist(strsplit(condition_j, " %in% "))[2]
+          cond[[j]][1] <- unlist(strsplit(condition_j, " %in% "))[1]
+          cond[[j]][2] <- " %in% "
+          cond[[j]][3] <- unlist(strsplit(condition_j, " %in% "))[2]
         }
       }
-      ncond <- length(tmp)
-      # generate empty datasets for all the variables appearing in the rules: 
+      ncond <- length(cond)
+      cond <- rev(cond)
+      
+      ## generate empty dataset for all the variables appearing in the rules: 
       treeplotdata <- data.frame(matrix(ncol = ncond))
       for (j in 1:ncond) {
-        names(treeplotdata)[j] <- tmp[[j]][1]
-        if (tmp[[j]][2] == " %in% ") {
+        names(treeplotdata)[j] <- cond[[j]][1]
+        if (cond[[j]][2] == " %in% ") {
           treeplotdata[,j] <- factor(treeplotdata[,j])
-          faclevels <- substring(tmp[[j]][3], first = 2)
+          faclevels <- substring(cond[[j]][3], first = 2)
           faclevels <- gsub(pattern = "\"", replacement = "", x = faclevels, fixed = TRUE)
           faclevels <- gsub(pattern = "(", replacement = "", x = faclevels, fixed = TRUE)
           faclevels <- gsub(pattern = ")", replacement = "", x = faclevels, fixed = TRUE)
           faclevels <- unlist(strsplit(faclevels, ", ",))
           levels(treeplotdata[,j]) <- c(
-            levels(x$data[,tmp[[j]][1]])[levels(x$data[,tmp[[j]][1]]) %in% faclevels],
-            levels(x$data[,tmp[[j]][1]])[!(levels(x$data[,tmp[[j]][1]]) %in% faclevels)])
-          tmp[[j]][3] <- length(faclevels)
+            levels(x$data[,cond[[j]][1]])[levels(x$data[,cond[[j]][1]]) %in% faclevels],
+            levels(x$data[,cond[[j]][1]])[!(levels(x$data[,cond[[j]][1]]) %in% faclevels)])
+          cond[[j]][3] <- length(faclevels)
         }
       }
+
       
-      # generate partynode objects for plotting:
+      ## Generate partynode objects for plotting:
+      
       nodes <- list()
-      # Construct level 0 of tree (the two terminal nodes), conditional on operator of last condition:
-      if (tmp[[ncond]][2] == " > ") { # If condition involves " > ", the tree continues right:
-        nodes[[2]] <- list(id = 1L, split = NULL, kids = NULL, surrogates = NULL,
+      
+      ## Create level 0 (bottom level, last two nodes):
+      ## If last condition has " > " : exit node on left, coefficient on right:
+      if (cond[[1]][2] == " > ") { # If condition involves " > ", the tree has nonzero coef on right:
+        nodes[[1]] <- list(id = 1L, split = NULL, kids = NULL, surrogates = NULL, 
                            info = exit.label)
-        nodes[[1]] <- list(id = 2L, split = NULL, kids = NULL, surrogates = NULL,
+        nodes[[2]] <- list(id = 2L, split = NULL, kids = NULL, surrogates = NULL,
                            info = round(nonzeroterms$coefficient[i], digits = 3))
-      } else { # If condition involves " <= " or " %in% " the tree continues left:
-        nodes[[2]] <- list(id = 1L, split = NULL, kids = NULL, surrogates = NULL,
+      } else { 
+      ## If last condition has " <= " or " %in% " : coefficient on left, exit node on right:
+        nodes[[1]] <- list(id = 1L, split = NULL, kids = NULL, surrogates = NULL,
                            info = round(nonzeroterms$coefficient[i], digits = 3))
-        nodes[[1]] <- list(id = 2L, split = NULL, kids = NULL, surrogates = NULL,
+        nodes[[2]] <- list(id = 2L, split = NULL, kids = NULL, surrogates = NULL,
                            info = exit.label)
       }
       class(nodes[[1]]) <- class(nodes[[2]]) <- "partynode"
       
-      # if there are > 1 conditions in rule, loop for (nconditions - 1) times:
-      if (ncond > 1) {
-        for (lev in 1L:(ncond - 1)) { # lev is a counter for the level in the tree
-          if (tmp[[lev + 1]][2] == " > ") { # If condition involves " > ", the tree continues right:
-            nodes[[lev * 2 + 1]] <- list(id = as.integer(lev * 2 + 1),
-                                         split = partysplit(
-                                           as.integer(lev), breaks = as.numeric(tmp[[lev]][3])),
-                                         kids = list(nodes[[lev * 2 - 1]], nodes[[lev * 2]]),
-                                         surrogates = NULL, info = NULL)
-            nodes[[lev * 2 + 2]] <- list(id = as.integer(lev * 2 + 2), split = NULL,
-                                         kids = NULL, surrogates = NULL, info = exit.label)
-          } else { # If condition involves " <= " or " %in% " the tree continues left:
-            nodes[[lev * 2 + 1]] <- list(id = as.integer(lev * 2 + 1), split = NULL,
-                                         kids = NULL, surrogates = NULL, info = exit.label)
-            nodes[[lev * 2 + 2]] <- list(id = as.integer(lev * 2 + 2),
-                                         split = partysplit(
-                                           as.integer(lev), breaks = as.numeric(tmp[[lev]][3])),
-                                         kids = list(nodes[[lev * 2 - 1]], nodes[[lev * 2]]),
-                                         surrogates = NULL, info = NULL)
-          }
-          class(nodes[[lev * 2 + 1]]) <- class(nodes[[lev * 2 + 2]]) <- "partynode"
-        }
-      }
-      # Construct root node:
-      lev <- ncond
-      nodes[[lev * 2 + 1]] <- list(id = as.integer(lev * 2 + 2),
-                                   split = partysplit(as.integer(lev), breaks = as.numeric(tmp[[lev]][3])),
-                                   kids = list(nodes[[lev * 2]], nodes[[lev * 2 - 1]]),
-                                   surrogates = NULL, info = NULL)
-      class(nodes[[lev * 2 + 1]]) <- "partynode"
       
-      ## Open  new plotting page if needed:
-      if (nonzeroterms$rowno[i] == 1 && nonzeroterms$colno[i] == 1) {
-        grid::grid.newpage()
-        grid::pushViewport(grid::viewport(layout = grid::grid.layout(plot.dim[1], plot.dim[2])))
+      ## Create inner levels (if necessary):
+      if (ncond > 1) {
+        for (level in 1:(ncond - 1)) {
+          if (cond[[level + 1]][2] == " > ") { 
+            ## If condition in level above has " > " : exit node on left, right node has kids:
+            nodes[[level * 2 + 1]] <- list(id = as.integer(level * 2 + 1), 
+                                          split = NULL, 
+                                          kids = NULL, 
+                                          surrogates = NULL, 
+                                          info = exit.label)
+            nodes[[level * 2 + 2]] <- list(id = as.integer(level * 2 + 2), 
+                                          split = partysplit(as.integer(level), breaks = as.numeric(cond[[level]][3])),
+                                          kids = list(nodes[[level * 2 - 1]], nodes[[level * 2]]),
+                                          surrogates = NULL, 
+                                          info = NULL)
+            } else { 
+            ## If condition in level above has " <= " or " %in% " : left node has kids, exit node right:
+            nodes[[level * 2 + 1]] <- list(id = as.integer(level * 2 + 1),
+                                          split = partysplit(as.integer(level), breaks = as.numeric(cond[[level]][3])),
+                                          kids = list(nodes[[level * 2 - 1]], nodes[[level * 2]]),
+                                          surrogates = NULL, 
+                                          info = NULL)
+            nodes[[level * 2 + 2]] <- list(id = as.integer(level * 2 + 2), 
+                                          split = NULL,
+                                          kids = NULL, 
+                                          surrogates = NULL, 
+                                          info = exit.label)
+         }  
+         class(nodes[[level * 2 + 1]]) <- class(nodes[[level * 2 + 2]]) <- "partynode"
       }
-      ## open correct viewport:
-      grid::pushViewport(grid::viewport(layout.pos.col = nonzeroterms$colno[i],
-                                        layout.pos.row = nonzeroterms$rowno[i]))
-      ## plot the rule:
-      fftree <- party(nodes[[lev * 2 + 1]], data = treeplotdata)
-      plot(fftree, newpage = FALSE, 
-           main = paste0(nonzeroterms$rule[i], ": Importance = ", round(nonzeroterms$imp[i], digits = 3)),
-           inner_panel = node_inner(fftree, id = FALSE),
-           terminal_panel = node_terminal(fftree, id = FALSE), gp = grid::gpar(...))
-      grid::popViewport()
     }
+      
+    ## Create root node:
+    nodes[[ncond * 2 + 1]] <- list(id = as.integer(ncond * 2 + 1),
+                                   split = partysplit(as.integer(ncond), breaks = as.numeric(cond[[ncond]][3])),
+                                   kids = list(nodes[[ncond * 2 - 1]], nodes[[ncond * 2]]),
+                                   surrogates = NULL, 
+                                   info = NULL)
+    class(nodes[[ncond * 2 + 1]]) <- "partynode"
+      
+    ## Open new plotting page if needed:
+    if (nonzeroterms$rowno[i] == 1 && nonzeroterms$colno[i] == 1) {
+      grid::grid.newpage()
+      grid::pushViewport(grid::viewport(layout = grid::grid.layout(plot.dim[1], plot.dim[2])))
+    }
+    
+    ## Open viewport:
+    grid::pushViewport(grid::viewport(layout.pos.col = nonzeroterms$colno[i],
+                                      layout.pos.row = nonzeroterms$rowno[i]))
+    
+    ## pPlot the rule:
+    fftree <- party(nodes[[ncond * 2 + 1]], data = treeplotdata)
+    plot(fftree, newpage = FALSE, 
+         main = paste0(nonzeroterms$rule[i], ": Importance = ", round(nonzeroterms$imp[i], digits = 3)),
+         inner_panel = node_inner(fftree, id = FALSE),
+         terminal_panel = node_terminal(fftree, id = FALSE), gp = grid::gpar(...))
+    grid::popViewport()
   }
+  }
+  
   if (ask) {
     grDevices::devAskNewPage(ask = FALSE)
   }
@@ -1907,6 +2248,58 @@ image.scale <- function(z, col, breaks, axis.pos = 4, add.axis = TRUE) {
 
 
 
+## Get rule conditions
+## 
+## \code{get_conditions} returns rule conditions in a matrix form
+##  
+## @param object object of class pre
+## @param penalty.par.val character. Value of the penalty parameter value 
+## \eqn{\lambda} to be used for selecting the final ensemble. The ensemble 
+## with penalty parameter criterion yielding minimum cv error 
+## (\code{"lambda.min"}) is taken, by default. Alternatively, the penalty 
+## parameter yielding error within 1 standard error of minimum cv error 
+## ("\code{lambda.1se}"), or a numeric value may be specified, corresponding 
+## to one of the values of lambda in the sequence used by glmnet,
+## for which estimated cv error can be inspected by running \code{x$glmnet.fit}
+## and \code{plot(x$glmnet.fit)}.
+## @examples \donttest{set.seed(42)
+## airq.ens <- pre(Ozone ~ ., data = airquality)
+## get_conditions(airq.ens)}
+get_conditions <- function(object, penalty.par.val = "lambda.1se") {
+  ## get maximum rule depth used for generating ensemble:
+  if (is.null(object$call$maxdepth)) {
+    maxdepth <- 3
+  } else {
+    maxdepth <- object$call$maxdepth
+  }
+  ## get the rules from the ensemble:
+  rules <- object$rules  
+  ## cut rules into parts:
+  parts <- strsplit(rules[,"description"], split = " ")
+  ## turn parts into matrix: 
+  parts <- matrix(unlist(lapply(parts, `length<-`, max(lengths(parts)))), 
+                  ncol = max(lengths(parts)), byrow = TRUE)
+  ## eliminate every fourth column (has "&" only):
+  parts <- data.frame(parts[,!(1:ncol(parts) %% 4 == 0)])
+  ## set every third column to type numeric:
+  parts[,(1:ncol(parts) %% 3 == 0)] <- apply(parts[,(1:ncol(parts) %% 3 == 0)], 2, as.numeric)
+  parts <- data.frame(rule = rules$rule, parts)
+  names(parts) <- c("rule", paste0(rep(c("splitvar", "splitop", "splitval"), 
+                                       times = maxdepth), 
+                                   rep(1:maxdepth, each = 3)))
+  ## only get rules that are in final ensemble:
+  coefs <- coef(object, penalty.par.val = penalty.par.val)
+  nonzero_rules <- coefs[coefs$coefficient != 0,]$rule
+  parts <- parts[parts$rule %in% nonzero_rules,]
+  ## return result:
+  return(parts)
+}
+
+
+
+
+
+
 #' Plotting baselearner correlations
 #' 
 #' \code{corplot} plots correlations between baselearners
@@ -1934,8 +2327,7 @@ image.scale <- function(z, col, breaks, axis.pos = 4, add.axis = TRUE) {
 #' under \code{\link{par}}.
 #' @param legend.breaks numeric vector of breakspoints and colors to be 
 #' depicted in the plot's legend.
-#' @examples \donttest{
-#' set.seed(42)
+#' @examples \donttest{set.seed(42)
 #' airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),])
 #' corplot(airq.ens)
 #' }
