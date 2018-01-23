@@ -1,4 +1,4 @@
-67df90ada25ea02ce4d06a5fc5fda1f3 *DESCRIPTION
+2d2539616656fbda29bde6783cf0bdde *DESCRIPTION
 043e9a2adb17f9e1a061c23d179d7e8c *NAMESPACE
 912cb9292451ac8db47a1b323c767867 *NEWS
 eb7bfbf6e1566cffe45b8bbb2d79c4a8 *R/data.R
@@ -83,7 +83,7 @@ f0561c3bba1b29f3eeeb03f3d98e8429 *tests/testthat/previous_results/gpe_tree_binar
 3705b7477eab51f6fbe822db199d6a0b *tests/testthat/previous_results/tree_nodes_from_minimal_xtra_unlist.RDS
 2e7975be1606a99bcd9fba2b3656bee6 *tests/testthat/previous_results/tree_nodes_rules.RDS
 2e70f06d6ab674d7715c06b0c3f695f8 *tests/testthat/previous_results/tree_nodes_rules_stump.RDS
-e179a9a1baa92d27986c6dceb3adc08d *tests/testthat/test_gpe.R
+336da9bfc46ce706981418a53059c6e3 *tests/testthat/test_gpe.R
 4921a99f3939d5896cbd29587952758d *tests/testthat/test_gpe_misc.R
 4fede84e3b37d9130f1fc845fc7cebde *tests/testthat/test_partykit_skins.R
 130a61411147be1c9ccc7d67808105a9 *tests/testthat/test_pre_misc.R

@@ -1,10 +1,11 @@
 Package: pre
 Title: Prediction Rule Ensembles
-Version: 0.4
+Version: 0.4-1
 Authors@R: c(person("Marjolein", "Fokkema", role = c("aut", "cre"), email = 
   "m.fokkema@fsw.leidenuniv.nl"), person(given = "Benjamin", 
   family = "Christoffersen", role = "aut", email = "boennecd@gmail.com"))
-Author: Marjolein Fokkema [aut, cre], Benjamin Christoffersen [aut]
+Author: Marjolein Fokkema [aut, cre],
+  Benjamin Christoffersen [aut]
 Maintainer: Marjolein Fokkema <m.fokkema@fsw.leidenuniv.nl>
 Description: Derives prediction rule ensembles (PREs). Largely follows the
     procedure for deriving PREs as described in Friedman & Popescu (2008; 
@@ -24,6 +25,6 @@ Encoding: UTF-8
 LazyData: true
 RoxygenNote: 6.0.1
 NeedsCompilation: no
-Packaged: 2017-08-31 18:11:38 UTC; fokkemam
+Packaged: 2018-01-23 15:49:53 UTC; fokkemam
 Repository: CRAN
-Date/Publication: 2017-08-31 18:37:11 UTC
+Date/Publication: 2018-01-23 16:54:13 UTC
