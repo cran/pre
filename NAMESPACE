@@ -5,7 +5,8 @@ S3method("predict", "gpe")
 S3method("print", "pre")
 S3method("print", "gpe")
 S3method("plot", "pre")
-
+S3method("summary", "pre")
+S3method("summary", "gpe")
 
 
 export("bsnullinteract")
@@ -27,7 +28,7 @@ export("singleplot")
 export("corplot")
 export("maxdepth_sampler")
 export("gpe_rules_pre")
-
+export("caret_pre_model")
 
 
 import("Formula")
@@ -36,7 +37,7 @@ import("stats")
 import("graphics")
 import("partykit")
 import("rpart")
-
+import("survival")
 
 
 importFrom("methods", "as")

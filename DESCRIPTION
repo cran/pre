@@ -1,6 +1,6 @@
 Package: pre
 Title: Prediction Rule Ensembles
-Version: 0.5.0
+Version: 0.6.0
 Authors@R: c(person("Marjolein", "Fokkema", role = c("aut", "cre"), email = 
   "m.fokkema@fsw.leidenuniv.nl"), person(given = "Benjamin", 
   family = "Christoffersen", role = "aut", email = "boennecd@gmail.com"))
@@ -19,14 +19,14 @@ URL: https://github.com/marjoleinF/pre
 BugReports: https://github.com/marjoleinF/pre/issues
 Depends: R (>= 3.1.0)
 Imports: earth, Formula, glmnet, graphics, methods, partykit, rpart,
-        stringr
+        stringr, survival
 Suggests: akima, datasets, doParallel, foreach, glmertree, grid,
-        mlbench, testthat
+        mlbench, testthat, mboost
 License: GPL-2 | GPL-3
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 6.0.1
+RoxygenNote: 6.1.0
 NeedsCompilation: no
-Packaged: 2018-05-07 18:58:14 UTC; fokkemam
+Packaged: 2018-08-03 10:51:45 UTC; fokkemam
 Repository: CRAN
-Date/Publication: 2018-05-07 19:51:48 UTC
+Date/Publication: 2018-08-03 11:10:03 UTC

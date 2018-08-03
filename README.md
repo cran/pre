@@ -1,14 +1,14 @@
 pre: an R package for deriving prediction rule ensembles
 ========================================================
 
-pre is an R package for deriving prediction rule ensembles for binary, multinomial, (multivariate) continuous and count outcome variables. Input variables may be numeric, ordinal and nominal. An extensive description of the implementation and functionality is provided in Fokkema (2017). The package largely implements the algorithm for deriving prediction rule ensembles as described in J. Friedman & Popescu (2008), with several adjustments:
+pre is an R package for deriving prediction rule ensembles for binary, multinomial, (multivariate) continuous, count and survival outcome variables. Input variables may be numeric, ordinal and categorical. An extensive description of the implementation and functionality is provided in Fokkema (2017). The package largely implements the algorithm for deriving prediction rule ensembles as described in Friedman & Popescu (2008), with several adjustments:
 
 1.  The package is completely R based, allowing users better access to the results and more control over the parameters used for generating the prediction rule ensemble.
 2.  The unbiased tree induction algorithms of Hothorn, Hornik, & Zeileis (2006) is used for deriving prediction rules, by default. Alternatively, the (g)lmtree algorithm of Zeileis, Hothorn, & Hornik (2008) can be employed, or the classification and regression tree (CART) algorithm of Breiman, Friedman, Olshen, & Stone (1984).
-3.  The package supports (multivariate) continuous, binary, multinomial and count response variables
+3.  The package supports a wider range of response variables.
 4.  The package allows for plotting the final rule ensemble as a collection of simple decision trees.
 5.  The initial ensembles may be generated as in bagging, boosting and/or random forests.
-6.  Hinge functions of predictor variables may be included as baselearners, like in the multivariate adaptive regression splines method of J. H. Friedman (1991), using the gpe() function.
+6.  Hinge functions of predictor variables may be included as baselearners, like in the multivariate adaptive regression splines method of Friedman (1991), using the gpe() function.
 
 Note that pre is under development, and much work still needs to be done.
 
@@ -36,7 +36,7 @@ airq.ens
 #>   cv error type : Mean-Squared Error
 #> 
 #>          rule  coefficient                          description
-#>   (Intercept)   72.9680699                                 <NA>
+#>   (Intercept)   72.9680699                                    1
 #>       rule191  -15.6401487              Wind > 5.7 & Temp <= 87
 #>       rule173   -8.6645924              Wind > 5.7 & Temp <= 82
 #>       rule204    8.1715564         Wind <= 10.3 & Solar.R > 148
@@ -66,7 +66,7 @@ We can obtain the estimated coefficients for each of the baselearners using the 
 coefs <- coef(airq.ens)
 coefs[1:10,]
 #>            rule coefficient                         description
-#> 201 (Intercept)   72.968070                                <NA>
+#> 201 (Intercept)   72.968070                                   1
 #> 166     rule191  -15.640149             Wind > 5.7 & Temp <= 87
 #> 149     rule173   -8.664592             Wind > 5.7 & Temp <= 82
 #> 178     rule204    8.171556        Wind <= 10.3 & Solar.R > 148
@@ -117,14 +117,21 @@ We can assess the expected prediction error of the prediction rule ensemble thro
 ``` r
 set.seed(43)
 airq.cv <- cvpre(airq.ens)
-airq.cv$accuracy
 #> $MSE
 #>       MSE        se 
-#> 364.99773  83.88072 
+#> 332.48191  72.23573 
 #> 
 #> $MAE
 #>       MAE        se 
-#> 13.748826  1.264794
+#> 13.186533  1.200747
+airq.cv$accuracy
+#> $MSE
+#>       MSE        se 
+#> 332.48191  72.23573 
+#> 
+#> $MAE
+#>       MAE        se 
+#> 13.186533  1.200747
 ```
 
 We can assess the presence of input variable interactions using the `interact()` and `bsnullinteract()` funtions:
@@ -132,7 +139,7 @@ We can assess the presence of input variable interactions using the `interact()`
 ``` r
 set.seed(44)
 nullmods <- bsnullinteract(airq.ens)
-int <- interact(airq.ens, nullmods = nullmods, c("Temp", "Wind", "Solar.R"))
+int <- interact(airq.ens, nullmods = nullmods, c("Temp", "Wind", "Solar.R", "Month"))
 ```
 
 ![](inst/README-figures/README-unnamed-chunk-11-1.png)
@@ -148,7 +155,7 @@ corplot(airq.ens)
 Including hinge functions (multivariate adaptive regression splines)
 --------------------------------------------------------------------
 
-More complex prediction ensembles can be obtained using the `gpe()` function. The abbreviation gpe stands for generalized prediction ensembles, which may also include hinge functions of the predictor variables as described in J. H. Friedman (1991), in addition to rules and/or linear terms. Addition of such hinge functions may further improve predictive accuracy. See the following example:
+More complex prediction ensembles can be obtained using the `gpe()` function. The abbreviation gpe stands for generalized prediction ensembles, which may also include hinge functions of the predictor variables as described in Friedman (1991), in addition to rules and/or linear terms. Addition of such hinge functions may further improve predictive accuracy. See the following example:
 
 ``` r
 set.seed(42)
@@ -190,7 +197,7 @@ Breiman, L., Friedman, J., Olshen, R., & Stone, C. (1984). Classification and re
 
 Fokkema, M. (2017). Pre: An r package for fitting prediction rule ensembles. *arXiv:1707.07149*. Retrieved from <https://arxiv.org/abs/1707.07149>
 
-Friedman, J. H. (1991). Multivariate adaptive regression splines. *The Annals of Statistics*, *19*(1), 1–67.
+Friedman, J. (1991). Multivariate adaptive regression splines. *The Annals of Statistics*, *19*(1), 1–67.
 
 Friedman, J., & Popescu, B. (2008). Predictive learning via rule ensembles. *The Annals of Applied Statistics*, *2*(3), 916–954. Retrieved from <http://www.jstor.org/stable/30245114>
 

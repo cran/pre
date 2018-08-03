@@ -4,52 +4,75 @@
 \alias{cvpre}
 \title{Full k-fold cross validation of a prediction rule ensemble (pre)}
 \usage{
-cvpre(object, k = 10, verbose = FALSE, pclass = 0.5,
-  penalty.par.val = "lambda.1se", parallel = FALSE)
+cvpre(object, k = 10, penalty.par.val = "lambda.1se", pclass = 0.5,
+  foldids = NULL, verbose = FALSE, parallel = FALSE, print = TRUE)
 }
 \arguments{
 \item{object}{An object of class \code{\link{pre}}.}
 
 \item{k}{integer. The number of cross validation folds to be used.}
 
-\item{verbose}{logical. Should progress of the cross validation be printed 
-to the command line?}
+\item{penalty.par.val}{character or numeric. Value of the penalty parameter
+\eqn{\lambda} to be employed for selecting the final ensemble. The default
+\code{"lambda.min"} employs the \eqn{\lambda} value within 1 standard
+error of the minimum cross-validated error. Alternatively, 
+\code{"lambda.min"} may be specified, to employ the \eqn{\lambda} value
+with minimum cross-validated error, or a numeric value \eqn{>0} may be 
+specified, with higher values yielding a sparser ensemble. To evaluate the 
+trade-off between accuracy and sparsity of the final ensemble, inspect
+\code{pre_object$glmnet.fit} and \code{plot(pre_object$glmnet.fit)}.}
 
-\item{pclass}{numeric. Only used for classification. Cut-off value for the 
+\item{pclass}{numeric. Only used for binary classification. Cut-off value for the 
 predicted probabilities that should be used to classify observations to the
 second class.}
 
-\item{penalty.par.val}{numeric or character. Calculate cross-validated error for 
-ensembles with penalty parameter criterion giving minimum cv error 
-(\code{"lambda.min"}) or giving cv error that is within 1 standard error of 
-minimum cv error ("\code{lambda.1se}")? Alternatively, a numeric value may be 
-specified, corresponding to one of the values of lambda in the sequence used by 
-glmnet, for which estimated cv error can be inspected by running 
-\code{object$glmnet.fit} and \code{plot(object$glmnet.fit)}.}
+\item{foldids}{numeric vector of \code{length(nrow(object$data))} (the number of
+observations in the training data used to fit the original ensemble). Defaults to
+\code{NULL}, resulting in the original training observations being randomly 
+assigned to one of the \eqn{k} folds. Depending on sample size, the number of 
+factors in the data, the number of factor levels and their distributions, the
+default may yield errors. See 'Details'.}
+
+\item{verbose}{logical. Should progress of the cross validation be printed 
+to the command line?}
 
 \item{parallel}{logical. Should parallel foreach be used? Must register parallel 
 beforehand, such as doMC or others.}
+
+\item{print}{logical. Should accuracy estimates be printed to the command line?}
 }
 \value{
-A list with three objects: \code{$cvpreds} (a vector with cross-validated
-predicted y values), \code{$ss} (a vector indicating the cross-validation subsample 
-each training observation was assigned to) and \code{$accuracy}. For continuous 
-outputs, accuracy is a list with elements \code{$MSE} (mean squared error on test 
-observations), \code{$MAE} (mean absolute error on test observations). For 
-classification, accuracy is a list with elements 
+Calculates cross-validated estimates of predictive accuracy and prints 
+these to the command line. For survival regression, accuracy is not calculated, 
+as there is currently no agreed-upon way to best quantify accuracy in survival 
+regression models. Users can compute their own accuracy estimates using the 
+(invisibly returned) cross-validated predictions (\code{$cvpreds}). 
+Invisibly, a list of three objects is returned: 
+\code{accuracy} (containing accuracy estimates), \code{cvpreds}
+(containing cross-validated predictions) and \code{fold_indicators} (a vector indicating
+the cross validation fold each observation was part of). For (multivariate) continuous 
+outcomes, accuracy is a list with elements \code{$MSE} (mean squared error on test 
+observations) and \code{$MAE} (mean absolute error on test observations). For 
+(binary and multiclass) classification, accuracy is a list with elements 
 \code{$SEL} (mean squared error on predicted probabilities), \code{$AEL} (mean absolute 
 error on predicted probabilities), \code{$MCR} (average misclassification error rate) 
-and \code{$table} (table with proportions of (in)correctly classified observations 
-per class).
+and \code{$table} (proportion table with (mis)classification rates).
 }
 \description{
 \code{cvpre} performs k-fold cross validation on the dataset used to create 
 the prediction rule ensemble, providing an estimate of predictive accuracy 
 on future observations.
 }
+\details{
+The random sampling employed by default may yield folds including all 
+observations with a given level of a given factor. This results in an error, 
+as it requirea predictions for factor levels to be computed that were not 
+observed in the training data, which is impossible. By manually specifying the
+\code{foldids} argument, users can make sure all class levels are represented in
+each of the \eqn{k} training partitions.
+}
 \examples{
-\donttest{
-set.seed(42)
+\donttest{set.seed(42)
 airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),])
 airq.cv <- cvpre(airq.ens)}
 }

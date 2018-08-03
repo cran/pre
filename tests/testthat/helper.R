@@ -81,7 +81,7 @@ data(BostonHousing, package = "mlbench", envir = environment())
 BostonHousing <- BostonHousing[
   sample.int(nrow(BostonHousing), 200, replace = FALSE), ]
 
-
-
-
-
+library("survival")
+Lung <- lung
+Lung$sex <- factor(Lung$sex)
+Lung <- Lung[complete.cases(Lung), ]

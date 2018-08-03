@@ -1,3 +1,33 @@
+Changes in Version 0.6 (2018-08-03)
+
+  - Added support for survival responses (i.e., family = "cox") in pre() 
+
+  - Added summary methods for pre and gpe. 
+
+  - Extended support to all response variable types available in pre() for 
+      functions plot(), importance() and cvpre().
+ 
+  - plot.pre now allows for specifying separate plotting colors for rules 
+      with positive and negative coefficients.
+
+  - coef and print methods for pre now return descriptions for the intercept 
+      (and factor variables), thanks to suggestion by Stephen Milborrow.
+
+  - Bug fix in pre(): ordered factors no longer yield error. Implemented 
+      new argument 'ordinal' in pre(), which specifies how ordered factors 
+      should be processed.
+
+  - Bug fix in cvpre(): pclass argument now processed correctly.
+
+  - Bug fix in cvpre(): previously, SDs insteas of SEs were returned for 
+      binary classification. Accurate standard errors are returned now.
+
+  - Bugs fixed in coef.pre(), print.pre(), plot.pre() and importance() 
+      when tree.unbiased = FALSE, thanks to a bug report by Stephen 
+      Milborrow. 
+ 
+
+
 Changes in Version 0.5 (2018-05-07)
 
   - Function pre() now also supports multinomial and multivariate 
