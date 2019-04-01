@@ -3,6 +3,7 @@ context("Tests the gpe function, gpe base learner functions and gpe sampling fun
 test_that("gpe works with default settings and gives previous results", {
   #####
   # Continous outcome
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(8782650)
   fit <- gpe(
     Ozone ~ ., 
@@ -46,6 +47,7 @@ test_that("gpe works with factor predictor and gpe_linear", {
 test_that("Sampling and subsampling works and is used in gpe", {
   #####
   # Bootstrap sample
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed <- 9495688)
   func <- gpe_sample(1)
   out <- func(100, rep(1, 100))
@@ -103,16 +105,17 @@ test_that("gpe_trees gives previous results for continous outcomes", {
     sample_func = gpe_sample(.5), 
     family = "gaussian")
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed <- 6772769)
   out <- do.call(func, c(args))
   
-  # save_to_test(out, "gpe_tree_1")
-  expect_true(setequal(out, read_to_test("gpe_tree_1")))
+  expect_known_value(out, "previous_results/gpe_tree_1.RDS", update = FALSE)
 
   #####  
   # Only use stumps
   func <- gpe_trees(ntrees = 10, maxdepth = 1)
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   out2 <- do.call(func, args)
   
@@ -125,16 +128,17 @@ test_that("gpe_trees gives previous results for continous outcomes", {
   # Without learning rate
   func <- gpe_trees(ntrees = 10, learnrate = 0)
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   out3 <- do.call(func, args)
   
-  # save_to_test(out3, "gpe_tree_3")
-  expect_equal(out3, read_to_test("gpe_tree_3"))
+  expect_known_value(out3, "previous_results/gpe_tree_3.RDS", update = FALSE)
   
   #####
   # Without removal of duplicates and complements
   func <- gpe_trees(ntrees = 10, remove_duplicates_complements = FALSE)
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   out4 <- do.call(func, args)
   
@@ -157,6 +161,7 @@ test_that("gpe_trees gives previous results for binary outcomes", {
     sample_func = gpe_sample(), 
     family = "binomial")
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed <- 8779606)
   out <- do.call(func, args)
   
@@ -165,6 +170,7 @@ test_that("gpe_trees gives previous results for binary outcomes", {
   
   func <- gpe_trees(ntrees = 10, use_grad = FALSE)
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   out2 <- do.call(func, args)
   
@@ -177,6 +183,7 @@ test_that("gpe_trees gives previous results for binary outcomes", {
   # Binary without learning rate
   func <- gpe_trees(ntrees = 10, learnrate = 0)
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   out <- do.call(func, args)
   
@@ -198,6 +205,7 @@ test_that("gpe_earth gives expected_result for continous outcomes", {
     sample_func = gpe_sample(.5), 
     family = "gaussian")
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed <- 6817505)
   out <- do.call(func, args)
   
@@ -208,6 +216,7 @@ test_that("gpe_earth gives expected_result for continous outcomes", {
   # Additive model
   func <- gpe_earth(degree = 1)
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   out2 <- do.call(func, args)
   
@@ -220,6 +229,7 @@ test_that("gpe_earth gives expected_result for continous outcomes", {
   # Without high learning rate
   func <- gpe_earth(learnrate = 1)
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   out3 <- do.call(func, args)
   
@@ -231,11 +241,13 @@ test_that("gpe_earth gives expected_result for continous outcomes", {
   # With different number of end nodes
   func <- gpe_earth(nk = 5, ntrain = 1)
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   out4 <- do.call(func, args)
   expect_length(out4, 4) # 5 - 1 for intercept
   
   func <- gpe_earth(nk = 50, ntrain = 1)
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   out5 <- do.call(func, args)
   expect_gt(length(out5), length(out4))
@@ -244,6 +256,7 @@ test_that("gpe_earth gives expected_result for continous outcomes", {
   # Without standardizing
   func <- gpe_earth(normalize = FALSE)
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   out6 <- do.call(func, args)
   
@@ -256,6 +269,7 @@ test_that("gpe_earth gives expected_result for continous outcomes", {
   
   func <- gpe_earth(cor_thresh = 1.01)
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   out7 <- do.call(func, args)
   
@@ -264,6 +278,7 @@ test_that("gpe_earth gives expected_result for continous outcomes", {
   # Should give the same
   func <- gpe_earth(cor_thresh = NULL)
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   out8 <- do.call(func, args)
   
@@ -286,6 +301,7 @@ test_that("gpe_earth gives expected_result for continous outcomes", {
     sample_func = gpe_sample(.5), 
     family = "gaussian")
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   out <- do.call(func, args)
   
@@ -305,6 +321,7 @@ test_that("gpe_earth gives previous results for binary outcomes", {
     sample_func = gpe_sample(), 
     family = "binomial")
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed <- 1067229)
   expect_message(out <- do.call(func, args), 
                  "Beware that gpe_earth will use gradient boosting")
@@ -316,6 +333,7 @@ test_that("gpe_earth gives previous results for binary outcomes", {
   # Without learning rate
   func <- gpe_earth(ntrain = 20, learnrate = 0)
   
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   expect_message(out1 <- do.call(func, args), 
                  "Beware that gpe_earth will use L2 loss to train")
@@ -327,6 +345,7 @@ test_that("gpe_earth gives previous results for binary outcomes", {
 })
 
 test_that("gpe_earth works with ordered factors and does not alter contrast options", {
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(1660180)
   n <- 100
   dat_frame <- data.frame(
@@ -386,6 +405,7 @@ test_that("gpe_linear gives expected_result", {
 })
 
 test_that("gpe_linear returns terms for factor levels", {
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(1660180)
   n <- 20
   dat_frame <- data.frame(
@@ -408,9 +428,7 @@ test_that("gpe_linear returns terms for factor levels", {
   expect_length(out, 3)
 })
 
-test_that("eTerm works for logicals", {
-  eTerm(c(F, T, T, T))
-})
+test_that("eTerm works for logicals", expect_length(eTerm(c(F, T, T, T)), 4))
 
 test_that("get_cv.glmnet_args works", {
   #####
@@ -433,6 +451,7 @@ test_that("get_cv.glmnet_args works", {
 
 test_that("gpe_cv.glmnet gives same results as cv.glmnet", {
   # Create dummy data
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(3782347)
   X <- rnorm(90)
   dim(X) <- c(30, 3)
@@ -445,8 +464,10 @@ test_that("gpe_cv.glmnet gives same results as cv.glmnet", {
   # fit with defaults
   def <- get_cv.glmnet_args(
     args = list(), x = X, y = y, weights = ws, family = "poisson")
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed <- 9629006)
   f1 <- do.call(glmnet::cv.glmnet, def)
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   f2 <- gpe_cv.glmnet()(x = X, y = y, weights = ws, family = "poisson")
   
@@ -457,8 +478,10 @@ test_that("gpe_cv.glmnet gives same results as cv.glmnet", {
   def <- get_cv.glmnet_args(
     args = list(lambda = c(.1, .01)), 
     x = X, y = y, weights = ws, family = "poisson")
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   f1 <- do.call(glmnet::cv.glmnet, def)
+  suppressWarnings(RNGversion("3.1.0"))
   set.seed(seed)
   f2 <- gpe_cv.glmnet(lambda =  c(.1, .01))(
     x = X, y = y, weights = ws, family = "poisson")

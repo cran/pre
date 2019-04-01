@@ -3,23 +3,25 @@ utils::globalVariables("%dopar%")
 #' Derive a prediction rule ensemble
 #'
 #' \code{pre} derives a sparse ensemble of rules and/or linear functions for 
-#' prediction of a continuous or binary outcome.
+#' prediction of a continuous, binary, count, multinomial, multivariate 
+#' continuous or survival response.
 #' 
 #' @param formula a symbolic description of the model to be fit of the form 
 #' \code{y ~ x1 + x2 + ...+ xn}. Response (left-hand side of the formula) 
-#' should be of class numeric (for \code{family = "gaussian"} of 
+#' should be of class numeric (for \code{family = "gaussian"} or
 #' \code{"mgaussian"}), integer (for \code{family = "poisson"}), factor (for 
-#' \code{family = "binomial"} or \code{"multinomial"}. Multivariate 
-#' continuous response should be specified like: \code{y1 + y2 + y3 ~ x1 + x2 + xn}. 
+#' \code{family = "binomial"} or \code{"multinomial"}). See Examples below. 
 #' Note that the minus sign (\code{-}) may not be used in the formula to omit
-#' variables in \code{data}, or the intercept, and neither should  \code{+ 0} 
+#' the intercept or variables in \code{data}, and neither should  \code{+ 0} 
 #' be used to omit the intercept. To omit the intercept from the final ensemble, 
 #' add \code{intercept = FALSE} to the call. To omit variables from the final
-#' ensemble, amke sure they are excluded from \code{data}.
-#' @param data data.frame containing the variables in the model. Response must
-#' be a factor for binary classification, numeric for (count) regression. Input
-#' variables must be of class numeric, factor or ordered factor.
-#' @param family specification of a glm family. Can be a character string (i.e., 
+#' ensemble, make sure they are excluded from \code{data}.
+#' @param data \code{data.frame} containing the variables in the model. Response 
+#' must be of class \code{factor} for classification, \code{numeric} for (count) 
+#' regression, \code{Surv} for survival regression. Input variables must be of 
+#' class numeric, factor or ordered factor. Otherwise, \code{pre} will attempt
+#' to recode.
+#' @param family specifies a glm family object. Can be a character string (i.e., 
 #' \code{"gaussian"}, \code{"binomial"}, \code{"poisson"}, \code{"multinomial"}, 
 #' \code{"cox"} or \code{"mgaussian"}), or a corresponding family object 
 #' (e.g., \code{gaussian}, \code{binomial} or \code{poisson}, see 
@@ -29,27 +31,26 @@ utils::globalVariables("%dopar%")
 #' class of the response variable specified in \code{formula}. als see Examples 
 #' below. 
 #' @param use.grad logical. Should gradient boosting with regression trees be
-#' employed when \code{learnrate > 0}? That is, use 
-#' \code{\link[partykit]{ctree}} as in Friedman (2001), but without the line 
-#' search. If \code{FALSE}. By default set to \code{TRUE}, as yielding shorter
-#' computation times and sparser ensembles. If \code{use.grad = FALSE}, 
+#' employed when \code{learnrate > 0}? If \code{TRUE}, use trees fitted by 
+#' \code{\link[partykit]{ctree}} or \code{\link[rpart]{rpart}} as in Friedman 
+#' (2001), but without the line search. If \code{use.grad = FALSE}, 
 #' \code{\link[partykit]{glmtree}} instead of \code{\link[partykit]{ctree}} 
 #' will be employed for rule induction, yielding longer computation times, 
-#' higher complexity, but likely higher predictive accuracy. See details below for 
-#' possible combinations of \code{family}, \code{use.grad} and \code{learnrate}.
-#' @param weights an optional vector of observation weights to be used for 
+#' higher complexity, but possibly higher predictive accuracy. See Details for 
+#' supported combinations of \code{family}, \code{use.grad} and \code{learnrate}.
+#' @param weights optional vector of observation weights to be used for 
 #' deriving the ensemble.
-#' @param type character. Specifies type of base learners to be included in the 
+#' @param type character. Specifies type of base learners to include in the 
 #' ensemble. Defaults to \code{"both"} (initial ensemble will include both rules 
 #' and linear functions). Other option are \code{"rules"} (prediction 
 #' rules only) or \code{"linear"} (linear functions only).
-#' @param sampfrac numeric value \eqn{> 0} and \eqn{\leq 1}. Specifies  
+#' @param sampfrac numeric value \eqn{> 0} and \eqn{\le 1}. Specifies  
 #' the fraction of randomly selected training observations used to produce each 
 #' tree. Values \eqn{< 1} will result in sampling without replacement (i.e., 
 #' subsampling), a value of 1 will result in sampling with replacement 
 #' (i.e., bootstrap sampling). Alternatively, a sampling function may be supplied, 
 #' which should take arguments \code{n} (sample size) and \code{weights}. 
-#' @param maxdepth positive integer. Maximum number of conditions in a rule. 
+#' @param maxdepth positive integer. Maximum number of conditions in rules. 
 #' If \code{length(maxdepth) == 1}, it specifies the maximum depth of 
 #' of each tree grown. If \code{length(maxdepth) == ntrees}, it specifies the
 #' maximum depth of every consecutive tree grown. Alternatively, a random
@@ -60,6 +61,12 @@ utils::globalVariables("%dopar%")
 #' creating each split in each tree. Ignored when \code{tree.unbiased=FALSE}.
 #' @param ntrees positive integer value. Number of trees to generate for the 
 #' initial ensemble.
+#' @param confirmatory character vector. Specifies one or more confirmatory terms 
+#' to be included in the final ensemble. Linear terms can be specified as the 
+#' name of a predictor variable included in \code{data}, rules can be specified
+#' as, for example, \code{"x1 > 6 & x2 <= 8"}, where x1 and x2 should be names
+#' of variables in \code{data}. Terms thus specified will be included in the
+#' final ensemble, as their coefficients will not be penalized in the estimation.
 #' @param removeduplicates logical. Remove rules from the ensemble which are 
 #' identical to an earlier rule?
 #' @param removecomplements logical. Remove rules from the ensemble which are
@@ -78,20 +85,19 @@ utils::globalVariables("%dopar%")
 #' standardize the dummified factors, users are advised to use the default 
 #' \code{standardize = FALSE}.
 #' @param ordinal logical. Should ordinal variables (i.e., ordered factors) be
-#' treated as continuous for generating rules? If \code{TRUE} (the default), 
-#' this generally yields simpler rules, shorter computation times and better 
+#' treated as continuous for generating rules? \code{TRUE} (the default)
+#' generally yields simpler rules, shorter computation times and better 
 #' generalizability of the final ensemble. 
 #' @param nfolds positive integer. Number of cross-validation folds to be used for 
 #' selecting the optimal value of the penalty parameter \eqn{\lambda} in selecting
 #' the final ensemble.
-#' @param verbose logical. Should information on the initial and final ensemble 
-#' be printed to the command line?
-#' @param par.init logical. Should parallel foreach be used to generate initial 
-#' ensemble? Only used when \verb{learnrate == 0}. Note: Must register parallel 
-#' beforehand, such as doMC or others. Furthermore, setting 
-#' \code{par.init = TRUE} will likely increase computation time for smaller 
+#' @param verbose logical. Should progress be printed to the command line?
+#' @param par.init logical. Should parallel \code{foreach} be used to generate 
+#' initial ensemble? Only used when \code{learnrate == 0}. Note: Must register 
+#' parallel beforehand, such as doMC or others. Furthermore, setting 
+#' \code{par.init = TRUE} will likely only increase computation time for smaller 
 #' datasets.
-#' @param par.final logical. Should parallel foreach be used to perform cross 
+#' @param par.final logical. Should parallel \code{foreach} be used to perform cross 
 #' validation for selecting the final ensemble? Must register parallel beforehand, 
 #' such as doMC or others.
 #' @param tree.control list with control parameters to be passed to the tree 
@@ -104,9 +110,13 @@ utils::globalVariables("%dopar%")
 #' (which suffers from biased variable selection) as implemented in 
 #' \code{\link[rpart]{rpart}}. See details below for possible combinations 
 #' with \code{family}, \code{use.grad} and \code{learnrate}.
-#' @param ... Additional arguments to be passed to 
+#' @param sparse logical. Should sparse design matrices be used? Likely improves
+#' computation times for large datasets.
+#' @param ... Additional arguments to be passed to
 #' \code{\link[glmnet]{cv.glmnet}}.
-#' @details Obervations with missing values will be removed prior to analysis.
+#' 
+#' @details Note that obervations with missing values will be removed prior to 
+#' analysis.
 #' 
 #' In some cases, duplicated variable names may appear in the model.
 #' For example, the first variable is a factor named 'V1' and there are also
@@ -133,12 +143,12 @@ utils::globalVariables("%dopar%")
 #' TRUE	\tab TRUE	\tab 0 \tab poisson	    \tab ctree\tab Single, integer \cr
 #' TRUE \tab TRUE \tab 0 \tab cox         \tab ctree\tab Object of class 'Surv' \cr
 #' \cr
-#' TRUE	\tab TRUE	\tab >0 \tab 	gaussian	  \tab ctree \tab Sinlge, numeric (non-integer) \cr
-#' TRUE	\tab TRUE	\tab >0	\tab mgaussian	  \tab ctree \tab Mutliple, numeric (non-integer) \cr
+#' TRUE	\tab TRUE	\tab >0 \tab 	gaussian	  \tab ctree \tab Single, numeric (non-integer) \cr
+#' TRUE	\tab TRUE	\tab >0	\tab mgaussian	  \tab ctree \tab Multiple, numeric (non-integer) \cr
 #' TRUE	\tab TRUE	\tab >0	\tab binomial	  \tab ctree  \tab Single, factor with 2 levels \cr
 #' TRUE	\tab TRUE	\tab >0	\tab multinomial	\tab ctree \tab Single, factor with >2 levels \cr
 #' TRUE	\tab TRUE	\tab >0	\tab poisson	    \tab ctree  \tab Single, integer \cr
-#' TRUE \tab TRUE \tab >0 \tab cox         \tab ctree\tab Object of class 'Surv \cr'
+#' TRUE \tab TRUE \tab >0 \tab cox         \tab ctree\tab Object of class 'Surv' \cr
 #' \cr
 #' FALSE \tab TRUE \tab 0 \tab gaussian	  \tab glmtree \tab Single, numeric (non-integer) \cr
 #' FALSE \tab TRUE \tab 0 \tab binomial	  \tab glmtree \tab Single, factor with 2 levels \cr
@@ -165,46 +175,42 @@ utils::globalVariables("%dopar%")
 #' by Achim Zeileis and Torsten Hothorn.
 #' 
 #' @return An object of class \code{pre}. It contains the initial ensemble of 
-#' rules and/or linear terms and a whole range of possible final ensembles. 
+#' rules and/or linear terms and a range of possible final ensembles. 
 #' By default, the final ensemble employed by all other
 #' methods and functions in package \code{pre} is selected using the 'minimum
 #' cross validated error plus 1 standard error' criterion. All functions and 
-#' methods for objects of class pre take a \code{penalty.parameter.value} argument, 
-#' which can be used to select a different criterion.
+#' methods for objects of class \code{pre} take a \code{penalty.parameter.value} 
+#' argument, which can be used to select a different criterion.
 #' 
 #' @examples \donttest{## Fit pre to a continuous response:
 #' airq <- airquality[complete.cases(airquality), ]
 #' set.seed(42)
-#' airq.ens <- pre(Ozone ~ ., data = airq, verbose = TRUE)
+#' airq.ens <- pre(Ozone ~ ., data = airq)
 #' airq.ens
 #' 
 #' ## Fit pre to a binary response:
 #' airq2 <- airquality[complete.cases(airquality), ]
 #' airq2$Ozone <- factor(airq2$Ozone > median(airq2$Ozone))
 #' set.seed(42)
-#' airq.ens2 <- pre(Ozone ~ ., data = airq2, family = "binomial", 
-#'                  verbose = TRUE)
+#' airq.ens2 <- pre(Ozone ~ ., data = airq2, family = "binomial")
 #' airq.ens2
 #' 
 #' ## Fit pre to a multivariate continuous response:
 #' airq3 <- airquality[complete.cases(airquality), ] 
 #' set.seed(42)
-#' airq.ens3 <- pre(Ozone + Wind ~ ., data = airq3, family = "mgaussian", 
-#'                  verbose = TRUE)
+#' airq.ens3 <- pre(Ozone + Wind ~ ., data = airq3, family = "mgaussian")
 #' airq.ens3
 #' 
 #' ## Fit pre to a multinomial response:
 #' set.seed(42)
-#' iris.pre <- pre(Species ~ ., data = iris, family = "multinomial",
-#'                 verbose = TRUE)
+#' iris.pre <- pre(Species ~ ., data = iris, family = "multinomial")
 #' iris.pre
 #' 
 #' ## Fit pre to a survival response:
 #' library("survival")
 #' lung <- lung[complete.cases(lung), ]
 #' set.seed(42)
-#' lung.ens <- pre(Surv(time, status) ~ . - sex, data = lung, family = "cox", 
-#'                 verbose = TRUE)
+#' lung.ens <- pre(Surv(time, status) ~ . - sex, data = lung, family = "cox")
 #' lung.ens
 #' 
 #' ## Fit pre to a count response:
@@ -225,6 +231,10 @@ utils::globalVariables("%dopar%")
 #' \code{\link{coef.pre}}, \code{\link{importance}}, \code{\link{predict.pre}}, 
 #' \code{\link{interact}}, \code{\link{cvpre}} 
 #' @references
+#' 
+#' Fokkema, M. (2018). Fitting prediction rule ensembles with R package pre.
+#' \url{https://arxiv.org/abs/1707.07149}.
+#' 
 #' Friedman, J. H. (2001). Greedy function approximation: a gradient boosting 
 #' machine. \emph{The Annals of Applied Statistics, 29}(5), 1189-1232.
 #' 
@@ -237,11 +247,13 @@ utils::globalVariables("%dopar%")
 #' @export
 pre <- function(formula, data, family = gaussian,
                 use.grad = TRUE, weights, type = "both", sampfrac = .5, 
-                maxdepth = 3L, learnrate = .01, mtry = Inf, ntrees = 500, 
+                maxdepth = 3L, learnrate = .01, mtry = Inf, ntrees = 500,
+                confirmatory = NULL,
                 removecomplements = TRUE, removeduplicates = TRUE, 
                 winsfrac = .025, normalize = TRUE, standardize = FALSE,
                 ordinal = TRUE, nfolds = 10L, tree.control, tree.unbiased = TRUE, 
-                verbose = FALSE, par.init = FALSE, par.final = FALSE, ...) { 
+                verbose = FALSE, par.init = FALSE, par.final = FALSE, 
+                sparse = FALSE, ...) { 
   
   
   #####################
@@ -254,17 +266,17 @@ pre <- function(formula, data, family = gaussian,
   ## Check if proper formula argument is specified 
   ## and check if glmertree should be employed:
   if (!(inherits(formula, "formula"))) {
-    stop("Argument 'formula' should specify and object of class 'formula'.")
+    stop("Argument 'formula' should specify and object of class 'formula'.\n")
   } else {
     if (length(as.Formula(formula))[[2]] == 3L) { # then right-hand side of regression formula consists of three parts and glmertree should be employed
       formula <- as.Formula(formula)
       use_glmertree <- TRUE
       if (formula[[3]][[2]][[2]] == 1) { # check if intercept is specified as regressor for linear model
           if (use.grad || learnrate > 0) {
-            stop("When specifying a formula with three-part right-hand side, argument 'use.grad' should be set to FALSE and 'learnrate' to 0", immediate. = TRUE)
+            stop("When specifying a formula with three-part right-hand side, argument 'use.grad' should be set to FALSE and 'learnrate' to 0.\n", immediate. = TRUE)
           }
         } else {
-          stop("When specifying a three-part right-hand side, the first part of the right-hand side should consist of an intercept only, e.g., y ~ 1 | cluster | x1 + x2 + x3.")
+          stop("When specifying a three-part right-hand side, the first part of the right-hand side should consist of an intercept only, e.g., y ~ 1 | cluster | x1 + x2 + x3.\n")
         }
       } else {
       use_glmertree <- FALSE
@@ -277,23 +289,23 @@ pre <- function(formula, data, family = gaussian,
     if (any(grepl(".", form, fixed = TRUE))) {
       if (any(grepl("(", form, fixed = TRUE))) {
         if (any(grepl(")", form, fixed = TRUE))) {
-          warning("Argument 'formula' contains both one or more functions of predictor variables, as well as a dot ('.'), which should be avoided. Model fitting may fail, and/or both the original variable(s) and their functions may be included as predictor variables.", immediate. = TRUE)  
+          warning("Argument 'formula' contains both one or more functions of predictor variables, as well as a dot ('.'), which should be avoided. Model fitting may fail, and/or both the original variable(s) and their functions may be included as predictor variables.\n", immediate. = TRUE)  
         }
       }
     }
     if (any(grepl("-", as.character(formula), fixed = TRUE))) {
-      warning("Argument 'formula' contains a minus sign. Note that the minus sign should not be used to omit the intercept or variables from the ensemble.", immediate. = TRUE)
+      warning("Argument 'formula' contains a minus sign. Note that the minus sign should not be used to omit the intercept or variables from the ensemble.\n", immediate. = TRUE)
     }
   }
 
   ## Check if proper data argument is specified:
   if (!is.data.frame(data)) {
-    stop("Argument 'data' should specify a data frame.")
+    stop("Argument 'data' should specify a data frame.\n")
   }
 
   ## Check and set up family argument: 
   if (length(family) > 1L) {
-    warning("Argument 'family' has length > 1, only first element will be used")
+    warning("Argument 'family' has length > 1, only first element will be used.\n")
     family <- family[1L]
   }
   if (is.function(family)) { 
@@ -302,41 +314,41 @@ pre <- function(formula, data, family = gaussian,
       link <- family$link
       family <- family$family
       if (family == "gaussian" && link != "identity") {
-        warning("The link function specified is currently not supported; identity link will be employed.", immediate. = TRUE)
+        warning("The link function specified is currently not supported; identity link will be employed.\n", immediate. = TRUE)
       } else if (family == "binomial" && link != "logit") {
-        warning("The link function specified is currently not supported; logit link will be employed.", immediate. = TRUE)
+        warning("The link function specified is currently not supported; logit link will be employed.\n", immediate. = TRUE)
       } else if (family == "poisson" && link != "log") {
-        warning("The link function specified is currently not supported; log link will be employed.", immediate. = TRUE)
+        warning("The link function specified is currently not supported; log link will be employed.\n", immediate. = TRUE)
       }
     } else {
-      stop("Argument 'family' should specify a family object.")
+      stop("Argument 'family' should specify a family object.\n")
     }
   }
   if (is.character(family)) {
     if (!(family %in% c("gaussian", "binomial", "poisson", "mgaussian", "multinomial", "cox"))) {
-      stop("Argument 'family' should be equal to 'gaussian', 'binomial', 'poisson', 'multinomial', 'mgaussian', 'cox', or a corresponding family object.")
+      stop("Argument 'family' should be equal to 'gaussian', 'binomial', 'poisson', 'multinomial', 'mgaussian', 'cox', or a corresponding family object.\n")
     }
   } else {
-    stop("Argument 'family' should be equal to 'gaussian', 'binomial', 'poisson', 'multinomial', 'mgaussian', 'cox', or a corresponding family object.")
+    stop("Argument 'family' should be equal to 'gaussian', 'binomial', 'poisson', 'multinomial', 'mgaussian', 'cox', or a corresponding family object.\n")
   }
   
   ## Check if proper weights argument is specified, if specified:
   if (missing(weights)) {
     weights <- rep(1L, times = nrow(data))
   } else if (length(weights) != nrow(data)) {
-      warning("Length of argument 'weights' is not equal to nrow(data)", immediate. = TRUE)
+      warning("Length of argument 'weights' is not equal to nrow(data).\n", immediate. = TRUE)
   }
   
   ## Check if proper type argument is specified:
   if (!(length(type) == 1L && type %in% c("rules", "both", "linear"))) {
-    stop("Argument 'type' should be 'rules', 'linear' or 'both'.")
+    stop("Argument 'type' should be 'rules', 'linear' or 'both'.\n")
   }
   
   ## Check if proper sampfrac argument is specified:
   if (!is.function(sampfrac)) {
     if (!(length(sampfrac) == 1 && is.numeric(sampfrac) && sampfrac > 0 && 
           sampfrac <= 1)) {
-      stop("Argument 'sampfrac' should be a single numeric value > 0 and <= 1, or a sampling function.")
+      stop("Argument 'sampfrac' should be a single numeric value > 0 and <= 1, or a sampling function.\n")
     }
   }
 
@@ -344,44 +356,51 @@ pre <- function(formula, data, family = gaussian,
   if (is.function(maxdepth)) {
     maxdepth <- maxdepth(ntrees = ntrees)
   } else if (!is.numeric(maxdepth)) {
-    stop("Argument 'maxdepth' should be either a numeric vector of length 1 or ntrees, or a random number generating function.")
+    stop("Argument 'maxdepth' should be either a numeric vector of length 1 or ntrees, or a random number generating function.\n")
   } else if (!(length(maxdepth) %in% c(1L, ntrees))) {
-    warning("Argument 'maxdepth' should be either a numeric vector of length 1 or ntrees, only first value of maxdepth will be used")
+    warning("Argument 'maxdepth' should be either a numeric vector of length 1 or ntrees, only first value of maxdepth will be used.\n")
     maxdepth <- maxdepth[1L]
   } 
   if (!all(maxdepth > 0)) {
-    stop("All values of maxdepth should be > 0")
+    stop("All values of maxdepth should be > 0.\n")
   } 
   if (!all(maxdepth == suppressWarnings(as.integer(maxdepth)) | is.infinite(maxdepth))) {
-    stop("Argument 'maxdepth' should consist of  of integer values or Inf), or a random number generating function.")
+    stop("Argument 'maxdepth' should consist of  of integer values or Inf), or a random number generating function.\n")
   }
   
   ## Check if proper learnrate argument is specified:
   if (!(length(learnrate) == 1L && is.numeric(learnrate) && 
         (learnrate >= 0 || learnrate <= 1))) {
-    stop("Argument 'learnrate' shoud be a single numeric value >= 0 and <= 1.")
+    stop("Argument 'learnrate' shoud be a single numeric value >= 0 and <= 1.\n")
   }
   
   ## Check if proper mtry argument is specified:
   if (!(length(mtry) == 1L && mtry > 0 && 
         (mtry == suppressWarnings(as.integer(mtry)) || is.infinite(mtry)))) {
-    stop("Argument 'mtry' should be a single integer value, or Inf.")
+    stop("Argument 'mtry' should be a single integer value, or Inf.\n")
   }
   
   ## Check if proper ntrees argument is specified:
   if (!(length(ntrees) == 1L && ntrees == as.integer(ntrees) && ntrees > 0)) {
-    stop("Argument 'ntrees' should be a single positive integer.")
+    stop("Argument 'ntrees' should be a single positive integer.\n")
   }
   
   ## Check if proper winsfrac argument is specified:
   if (!(length(winsfrac == 1L) && is.numeric(winsfrac) && winsfrac >= 0 && 
         winsfrac < 1)) {
-    stop("Argument 'winsfrac' should be a numeric value >= 0 and < 1.")
+    stop("Argument 'winsfrac' should be a numeric value >= 0 and < 1.\n")
   }
 
   ## Check if proper nfolds argument is specified:
   if (!(length(nfolds) == 1L && nfolds > 0 && nfolds == as.integer(nfolds))) {
-    stop("Argument 'nfolds' should be a positive integer.")
+    stop("Argument 'nfolds' should be a positive integer.\n")
+  }
+  
+  ## Check if proper confirmatory argument is specified:
+  if (!is.null(confirmatory)) {
+    if (!is.character(confirmatory)) {
+      stop("Argument 'confirmatory' should specify a character vector.\n")
+    }
   }
   
   ## Check if logical arguments of length 1 are properly specified:
@@ -390,13 +409,13 @@ pre <- function(formula, data, family = gaussian,
               standardize, ordinal, verbose, tree.unbiased, par.init, 
               par.final)) {
     if (!is_logical_and_length_one(i)) {
-      stop("Argument ", i, "should be TRUE of FALSE.")
+      stop("Argument ", i, "should be TRUE of FALSE.\n")
     }
   }
   
   if (par.final || par.init) {
     if(!requireNamespace("foreach")) {
-      warning("Parallel computation requires package foreach. Arguments 'par.init' and 'par.final' are set to FALSE.")   
+      warning("Parallel computation requires package foreach. Arguments 'par.init' and 'par.final' are set to FALSE.\n")   
       par.init <- par.final <- FALSE
     }
   }
@@ -410,28 +429,28 @@ pre <- function(formula, data, family = gaussian,
     } else if (!tree.unbiased) {
       if (any(maxdepth > 29)) {
         maxdepth[maxdepth > 29] <- 29L
-        warning("If tree.unbiased = FALSE, max(maxdepth) is 29.")
+        warning("If tree.unbiased = FALSE, max(maxdepth) is 29.\n")
       }
       tree.control <- rpart.control(maxdepth = maxdepth[1L])
       if (!is.infinite(mtry)) {
-        warning("Value specified for mtry will be ignored if tree.unbiased = FALSE.")
+        warning("Value specified for mtry will be ignored if tree.unbiased = FALSE.\n")
       }
     }
   } else {
     if (!is.list(tree.control)) {
-      stop("Argument 'tree.control' should be a list of control parameters.")
+      stop("Argument 'tree.control' should be a list of control parameters.\n")
     }
     if (use.grad && tree.unbiased && !use_glmertree) {
-      if (!all(sort(names(ctree_control())) == sort(names(tree.control)))) {
-        stop("Argument 'tree.control' should be a list containing named elements", names(ctree_control()))
+      if (!setequal(names(ctree_control()), names(tree.control))) {
+        stop("Argument 'tree.control' should be a list containing named elements ", paste(names(ctree_control()), collapse = ', '), "\n")
       }
     } else if (!use.grad && tree.unbiased) { 
-      if (!all(sort(names(mob_control())) == sort(names(tree.control)))) {
-        stop("Argument 'tree.control' should be a list containing named elements", names(mob_control()))
+      if (!setequal(names(mob_control()), names(tree.control))) {
+        stop("Argument 'tree.control' should be a list containing named elements ", paste(names(mob_control()), collapse = ', '), "\n")
       }
     } else if (!tree.unbiased) {
-      if(!all(sort(names(rpart.control())) == sort(names(tree.control)))) {
-        stop("Argument 'tree.control' should be a list containing names elements", names(rpart.control()))
+      if (!setequal(names(rpart.control()), names(tree.control))) {
+        stop("Argument 'tree.control' should be a list containing names elements ", paste(names(rpart.control()), collapse = ', '), "\n")
       }
     }
     if (use.grad) { ## if ctree or rpart are employed:
@@ -442,13 +461,13 @@ pre <- function(formula, data, family = gaussian,
     if (tree.unbiased) {
       tree.control$mtry <- mtry
     } else if (mtry != Inf) {
-      warning("Argument 'tree.unbiased' was set to FALSE, so rpart is employed for tree induction, and value specified for 'mtry' will be ignored.")
+      warning("Argument 'tree.unbiased' was set to FALSE, so rpart is employed for tree induction, and value specified for 'mtry' will be ignored.\n")
       mtry <- Inf
     }
   }
   
   if (!tree.unbiased && !use.grad && learnrate > 0) {
-    stop("Employing the rpart algorithm with a learnrate > 0 without gradient boosting is not supported.")
+    stop("Employing the rpart algorithm with a learnrate > 0 without gradient boosting is not supported.\n")
   }
   
   
@@ -462,12 +481,12 @@ pre <- function(formula, data, family = gaussian,
   ## Coerce character and logical variables to factors:
   if (any(char_names <- sapply(data, is.character))) {
     char_names <- names(data)[char_names]
-    warning("The following variables were of class 'character' and will be coerced to 'factor': ", char_names)
+    warning("The following variables were of class 'character' and will be coerced to 'factor': ", paste(char_names, collapse = " "), "\n")
     data[ , char_names] <- sapply(data[ , char_names], factor)
   }
   if (any(logic_names <- sapply(data, is.logical))) {
     logic_names <- names(data)[logic_names]
-    warning("The following variables were of class 'logical' and will be coerced to 'factor': ", logic_names)
+    warning("The following variables were of class 'logical' and will be coerced to 'factor': ", paste(logic_names, collapse = " "), "\n")
     data[ , logic_names] <- sapply(data[ , logic_names], factor)
   } 
   
@@ -530,7 +549,7 @@ pre <- function(formula, data, family = gaussian,
       if (all(sapply(data[,y_names], is.numeric))) {
         family <- "mgaussian"
       } else {
-        warning("Multiple response variables were specified, but not all were (but should be) numeric.")
+        warning("Multiple response variables were specified, but not all were (but should be) numeric.\n")
       }
     }
     
@@ -538,45 +557,45 @@ pre <- function(formula, data, family = gaussian,
     
     if (family[1L] == "gaussian") {
       if (length(y_names) > 1L) {
-        warning("Argument 'family' was set to 'gaussian', but multiple response variables were specified in 'formula'.")        
+        warning("Argument 'family' was set to 'gaussian', but multiple response variables were specified in 'formula'.\n")        
       }
       if (!is.numeric(data[,y_names])) { # then family should be poisson or gaussian
-        warning("Argument 'family' was set to 'gaussian', but the response variable specified in 'formula' is not of class numeric.")
+        warning("Argument 'family' was set to 'gaussian', but the response variable specified in 'formula' is not of class numeric.\n")
       }
     } else if (family[1L] == "poisson") {
       if (length(y_names) > 1L) {
-        warning("Argument 'family' was set to 'poisson', but multiple response variables were specified, which is not supported.")
+        warning("Argument 'family' was set to 'poisson', but multiple response variables were specified, which is not supported.\n")
       }
       if (!isTRUE(all.equal(round(data[,y_names]), data[,y_names]))) {
-        warning("Argument 'family' was set to 'poisson', but the response variable specified in 'formula' is non-integer.")
+        warning("Argument 'family' was set to 'poisson', but the response variable specified in 'formula' is non-integer.\n")
       }
     } else if (family[1L] == "binomial") {
       if (length(y_names) > 1L) {
-        warning("Argument 'family' was set to 'binomial', but multiple response variables were specified, which is not supported.")
+        warning("Argument 'family' was set to 'binomial', but multiple response variables were specified, which is not supported.\n")
       } else if (!is.factor(data[,y_names])) {
-        warning("Argument 'family' was set to 'binomial', but the response variable specified is not a factor.")
+        warning("Argument 'family' was set to 'binomial', but the response variable specified is not a factor.\n")
       } else if (nlevels(data[,y_names]) != 2L) {
-        warning("Argument 'family' was set to 'binomial', but the response variable has ", nlevels(data[,y_names]), " levels.")        
+        warning("Argument 'family' was set to 'binomial', but the response variable has ", nlevels(data[,y_names]), " levels.\n")        
       }
     } else if (family[1L] == "multinomial") {
       if (length(y_names) > 1L) {
-        warning("Argument 'family' was set to 'multinomial', but multiple response variables were specified, which is not supported.")
+        warning("Argument 'family' was set to 'multinomial', but multiple response variables were specified, which is not supported.\n")
       } else if (!is.factor(data[,y_names])) {
-        warning("Argument 'family' was set to 'multinomial', but the response variable specified is not a factor.")
+        warning("Argument 'family' was set to 'multinomial', but the response variable specified is not a factor.\n")
       } else if (nlevels(data[,y_names]) < 3L) {
-        warning("Argument 'family' was set to 'multinomial', but the response variable has ", nlevels(data[,y_names]), " levels.")
+        warning("Argument 'family' was set to 'multinomial', but the response variable has ", nlevels(data[,y_names]), " levels.\n")
       }
     } else if (family[1L] == "cox") {
       if (length(y_names) > 1L) {
-        warning("Argument 'family' was set to 'cox', but multiple response variables were specified, which is not supported.")
+        warning("Argument 'family' was set to 'cox', but multiple response variables were specified, which is not supported.\n")
       } else if (!is.Surv(data[ , y_names])) {
-        warning("Argument 'family' was set to 'cox', but the response variable specified is not of class Surv.")
+        warning("Argument 'family' was set to 'cox', but the response variable specified is not of class Surv.\n")
       }
     } else if (family == "mgaussian") {
       if (length(y_names) == 1L) {
-        warning("Argument 'family' was set to 'mgaussian', but only a single response variable was specified.")
+        warning("Argument 'family' was set to 'mgaussian', but only a single response variable was specified.\n")
       } else if (!all(sapply(data[,y_names], is.numeric))) {
-        warning("Argument 'family' was set to 'mgaussian', but not all response variables specified are numeric.")
+        warning("Argument 'family' was set to 'mgaussian', but not all response variables specified are numeric.\n")
       }
     }
   }
@@ -586,27 +605,27 @@ pre <- function(formula, data, family = gaussian,
   ## Check specification of tree growing algorithms employed:
   if (!tree.unbiased) { # rpart is employed
     if (family == "mgaussian") {
-      stop("Employing rpart algorithm for rule induction with a multivariate response variable is not supported. Set argument 'tree.unbiased' to TRUE and argument 'use.grad' to FALSE.")
+      stop("Employing rpart algorithm for rule induction with a multivariate response variable is not supported. Set argument 'tree.unbiased' to TRUE and argument 'use.grad' to FALSE.\n")
     } else if (learnrate > 0 && family == "multinomial") {
-      stop("Employing rpart algorithm for rule induction with a multinomial response variable and learnrate > 0 is not supported. Set argument 'learnrate' to 0, or arguments 'tree.unbiased' and 'use.grad' to TRUE.")
+      stop("Employing rpart algorithm for rule induction with a multinomial response variable and learnrate > 0 is not supported. Set argument 'learnrate' to 0, or arguments 'tree.unbiased' and 'use.grad' to TRUE.\n")
     }
   } else if (!use.grad) { # (g)lmtree is employed
     if (family == "multinomial") {
-      stop("Employing (g)lmtree for rule induction with a multinomial response variable is not supported. Set argument 'use.grad' to TRUE for multivariate responses.")
+      stop("Employing (g)lmtree for rule induction with a multinomial response variable is not supported. Set argument 'use.grad' to TRUE for multivariate responses.\n")
     } else if (family == "mgaussian") {
-      stop("Employing (g)lmtree for rule induction with a multivariate response variable is not supported. Set argument 'use.grad' to TRUE for multivariate responses.")
+      stop("Employing (g)lmtree for rule induction with a multivariate response variable is not supported. Set argument 'use.grad' to TRUE for multivariate responses.\n")
     } else if (family == "cox") {
-      stop("Employing (g)lmertree for rule induction with a survival response is not supported. Set argument 'use.grad' to TRUE for a survival response.")
+      stop("Employing (g)lmertree for rule induction with a survival response is not supported. Set argument 'use.grad' to TRUE for a survival response.\n")
     }
   }
   
   if (family == "cox") {
     if (!requireNamespace("survival", quietly = TRUE)) {
-      stop("For fitting a prediction rule ensemble with a survival response, package survival should be installed and loaded")    
+      stop("For fitting a prediction rule ensemble with a survival response, package survival should be installed and loaded.\n")    
     }
     if (learnrate > 0) {
       if (!requireNamespace("mboost", quietly = TRUE)) {
-        stop("For fitting a prediction rule ensemble with a survival response and learning rate > 0, package mboost should be installed.")
+        stop("For fitting a prediction rule ensemble with a survival response and learning rate > 0, package mboost should be installed.\n")
       }
     }
   }
@@ -653,6 +672,8 @@ pre <- function(formula, data, family = gaussian,
   
   if (type == "linear") {
     rules <- NULL
+    rulevars <- NULL
+    
   } else {
     if (use_glmertree) {
       rule_object <- pre_rules_mixed_effects(formula = formula, 
@@ -691,9 +712,12 @@ pre <- function(formula, data, family = gaussian,
                                removeduplicates = removeduplicates, 
                                removecomplements = removecomplements,
                                tree.unbiased = tree.unbiased,
-                               return.dupl.compl = TRUE)
+                               return.dupl.compl = TRUE, 
+                               sparse = sparse)
     }
     rules <- rule_object$rules
+    rulevars <- rule_object$rulevars
+    
   }
 
   #########################################################################
@@ -723,7 +747,11 @@ pre <- function(formula, data, family = gaussian,
     winsfrac = winsfrac, 
     x_names = x_names,
     y_names = y_names,
-    normalize = normalize)
+    normalize = normalize, 
+    sparse = sparse, 
+    rulevars = rulevars,
+    confirmatory = confirmatory)
+  rm(rulevars)
   
   x_scales <- modmat_data$x_scales
   wins_points <- modmat_data$wins_points
@@ -733,7 +761,7 @@ pre <- function(formula, data, family = gaussian,
   ### Fit regression model ###
   ############################
   
-  ### To allow for forward selection:
+  ### TODO: allow for forward selection:
   ## Include additional argument regression = "glmnet"
   ## which also takes argument "stepAIC"
   ## then number of terms (i.e., steps argument) should be specified
@@ -759,6 +787,13 @@ pre <- function(formula, data, family = gaussian,
   
   y <- modmat_data$y
   x <- modmat_data$x  
+
+  if (is.null(cl$penalty.factor)) {
+    penalty.factor <- rep(1L, times = ncol(x))
+  } 
+  if (!is.null(confirmatory)) {
+    penalty.factor[which(colnames(x) %in% confirmatory)] <- 0L
+  }
   
   # check whether there's duplicates in the variable names:
   # (can happen, for example, due to labeling of dummy indicators for factors)
@@ -767,7 +802,9 @@ pre <- function(formula, data, family = gaussian,
   } 
   glmnet.fit <- cv.glmnet(x, y, nfolds = nfolds, weights = weights, 
                           family = family, parallel = par.final, 
-                          standardize = standardize, ...)
+                          standardize = standardize, 
+                          penalty.factor = penalty.factor,
+                          ...)
   lmin_ind <- which(glmnet.fit$lambda == glmnet.fit$lambda.min)
   l1se_ind <- which(glmnet.fit$lambda == glmnet.fit$lambda.1se)
   if (verbose) {
@@ -811,20 +848,34 @@ get_modmat <- function(
   wins_points = NULL, x_scales = NULL,
   # These should be passed in all calls
   formula, data, rules, type, x_names, winsfrac, normalize, 
-  # Response variable is optional:
-  y_names = NULL) {
+  # Response variable names is optional:
+  y_names = NULL, sparse = FALSE, rulevars = NULL,
+  confirmatory = NULL) {
   
-  ## Evaluate rules on data:
-  if (type != "linear" && !is.null(rules)) {
-    ## TODO: use sparse matrix here?
-    expr <- parse(text = paste0("cbind(", paste0(rules, collapse = ", "), ")"))
-    x <- eval(expr, data)
-    colnames(x) <- names(rules)
-  }
-
+  ## TODO: is next line necessary? Only for converting ordered categorical vars to linear terms?
+  ## Is only used twice, in get_rulemat function below.
+  ## Perhaps should be conditional on ordinal argument of pre()?
+  data_org <- data # needed to evaluate rules later
+  
   # convert ordered categorical predictor variables to linear terms:
-  data[,sapply(data, is.ordered)] <- as.numeric(data[,sapply(data, is.ordered)])
-
+  data[,sapply(data, is.ordered)] <- 
+    as.numeric(data[,sapply(data, is.ordered)])
+  
+  ## Add confirmatory terms:
+  if (!is.null(confirmatory)) {
+    ## Get confirmatory rules and variables:
+    conf_vars <- confirmatory[confirmatory %in% x_names]
+    conf_rules <- confirmatory[!(confirmatory %in% conf_vars)]
+    if (length(conf_rules) > 0L) {
+      ## Evaluate rules (add to model matrix later):
+      eval_rules <- function(data, rule_descr) {
+        1L * with(data, eval(parse(text = rule_descr)))
+      }
+      conf_rules <- mapply(FUN = eval_rules, rule_descr = conf_rules, 
+                           MoreArgs = list(data = data))
+    }
+  }
+  
   #####
   # Perform winsorizing and normalizing
   if (type != "rules" && any(sapply(data[,x_names], is.numeric))) {
@@ -892,18 +943,69 @@ get_modmat <- function(
   }
 
   ## Combine rules and variables:
-  ## TODO: Use sparse matrices here?
-  #if (type == "rules") {do nothing}
+  if (length(rules) == 0L) rules <- NULL
   if (type == "linear" || is.null(rules)) {
-    x <- model.matrix(Formula(formula), data = data)
-  } else if (type == "both" && !is.null(rules)) {
-    x <- cbind(model.matrix(Formula(formula), data = data), x)
+    if (sparse) {
+      mf <- model.frame(Formula(formula), data)
+      x <- model.Matrix(terms(mf), mf, sparse = TRUE)
+      rm(mf)
+      
+    } else {
+      x <- model.matrix(Formula(formula), data = data)
+    }
+  } else if (type %in% c("both", "rules") && !is.null(rules)) {
+    if (sparse) {
+      x <- if (is.null(rulevars)) { 
+        .get_rules_mat_sparse(data_org, rules) 
+        } else {
+          rulevars
+        }
+      if (type == "both") {
+        mf <- model.frame(Formula(formula), data)
+        x <- cbind(model.Matrix(terms(mf), mf, sparse = TRUE), x)
+        rm(mf)
+      }
+    } else { 
+      x <- if (is.null(rulevars)) {
+        .get_rules_mat_dense(data_org, rules)
+        } else { 
+          rulevars
+        }
+      if (type == "both") {
+        x <- cbind(model.matrix(Formula(formula), data = data), x)
+      }
+    }
+    
+  } else { 
+    stop("not implemented with type ", sQuote(type), " and is.null(rules) is ", 
+         sQuote(is.null(rules)))
   }
   
   #####
   # Remove intercept
   x <- x[, colnames(x) != "(Intercept)", drop = FALSE]
 
+  ## Add confirmatory terms:
+  if (!is.null(confirmatory)) {
+    ## Get confirmatory rules and variables:
+    #conf_vars <- confirmatory[confirmatory %in% x_names]
+    #conf_rules <- confirmatory[!(confirmatory %in% conf_vars)]
+    if (length(conf_vars) > 0L) {
+      ## If type == "rules", add variables to model matrix:
+      if (type == "rules") {
+        x <- cbind(x, as.matrix(data[conf_vars], rownames.force = FALSE))
+        ## TODO: Then check if it should be winsorized or normalized, or issue warning if not
+      }
+    }
+    if (is.matrix(conf_rules)) {
+      if (!sparse) {
+        x <- cbind(x, conf_rules)
+      } else {
+        ## TODO: implement something for sparse matrices.
+      }
+    }
+  }
+  
   if (is.null(y_names)) {
     y <- NULL
   } else {
@@ -919,6 +1021,32 @@ get_modmat <- function(
   list(x = x, y = y, x_scales = x_scales, wins_points = wins_points)
 }
 
+.get_rules_mat_dense <- function(data, rules){
+  if(length(rules) == 0)
+    return(NULL)
+  
+  expr <- parse(text = paste0("cbind(", paste0(rules, collapse = ", "), ")"))
+  x <- eval(expr, data)
+  colnames(x) <- names(rules)
+  x
+}
+
+.get_rules_mat_sparse <- function(data, rules){
+  if(length(rules) == 0)
+    return(NULL)
+  
+  # See https://stackoverflow.com/a/8844057/5861244. 
+  #
+  # if all rules where binary then we could use the `lsparseMatrix-classes`. 
+  # However, this will not work when we call `glmnet` as it requires a double
+  # matrix`
+  expr <- paste0("cbind_sparse_vec(", paste0(
+    'as(as.numeric(', rules, '), "sparseVector")', collapse = ", "), ")")
+  x <- eval(parse(text = expr), data)
+  colnames(x) <- names(rules)
+  x
+}
+
 
 
 
@@ -930,7 +1058,8 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
                       tree.control = ctree_control(), use.grad = TRUE, 
                       family = "gaussian", verbose = FALSE, 
                       removeduplicates = TRUE, removecomplements = TRUE,
-                      tree.unbiased = TRUE, return.dupl.compl = FALSE) {
+                      tree.unbiased = TRUE, return.dupl.compl = FALSE, 
+                      sparse = FALSE) {
   
   n <- nrow(data)
   
@@ -1169,81 +1298,70 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
     }
   }
   
-  # Keep unique, non-empty rules only:
-  rules <- unique(rules[!rules==""])
-  
-  ## Adjust rule format of rpart rules:
-  if (!tree.unbiased) {
-    if (any(sapply(data, is.factor))) {
-      # replace "=" by " %in% c('"
-      for (i in names(data)[sapply(data, is.factor)]) { 
-        rules <- gsub(pattern = paste0(i, "="), replacement = paste0(i, " %in% c(\""), 
-                     x = rules, fixed = TRUE)
-      }
-      # replace all "," by "','"
-      rules <- gsub(pattern = ",", replacement = "\", \"", x = rules, fixed = TRUE)
-      ## add "')" at the end of the string
-      rules <- strsplit(x = rules, split = " & ", fixed = TRUE)
-      for (i in 1:length(rules)) {
-        for (j in names(data)[sapply(data, is.factor)]) {
-          if (any(grepl(j, rules[[i]], fixed = TRUE))) {
-            rules[[i]][grepl(j, rules[[i]], fixed = TRUE)] <- paste0(
-              rules[[i]][grepl(j, rules[[i]], fixed = TRUE)], "\")")
-          }        
+  if (length(rules) > 0) {
+    # Keep unique, non-empty rules only:
+    rules <- unique(rules[!rules==""])
+    if (sparse) {
+      rules <- .get_most_sparse_rule(rules, data)
+    }
+    ## Adjust rule format of rpart rules:
+    if (!tree.unbiased) {
+      if (any(sapply(data, is.factor))) {
+        # replace "=" by " %in% c('"
+        for (i in names(data)[sapply(data, is.factor)]) { 
+          rules <- gsub(pattern = paste0(i, "="), replacement = paste0(i, " %in% c(\""), 
+                       x = rules, fixed = TRUE)
+        }
+        # replace all "," by "','"
+        rules <- gsub(pattern = ",", replacement = "\", \"", x = rules, fixed = TRUE)
+        ## add "')" at the end of the string
+        rules <- strsplit(x = rules, split = " & ", fixed = TRUE)
+        for (i in 1:length(rules)) {
+          for (j in names(data)[sapply(data, is.factor)]) {
+            if (any(grepl(j, rules[[i]], fixed = TRUE))) {
+              rules[[i]][grepl(j, rules[[i]], fixed = TRUE)] <- paste0(
+                rules[[i]][grepl(j, rules[[i]], fixed = TRUE)], "\")")
+            }        
+          }
         }
       }
+      rules <- sapply(rules, paste0, collapse = " & ")
+      # "<" should be " <" and ">=" should be " >= "
+      rules <- gsub(pattern = ">=", replacement = " >= ", fixed = TRUE,
+                    x = gsub(pattern = "<", replacement = " <", x = rules, fixed = TRUE))
     }
-    rules <- sapply(rules, paste0, collapse = " & ")
-    # "<" should be " <" and ">=" should be " >= "
-    rules <- gsub(pattern = ">=", replacement = " >= ", fixed = TRUE,
-                  x = gsub(pattern = "<", replacement = " <", x = rules, fixed = TRUE))
-  }
-  
-  if (verbose) {
-    cat("\nA total of", ntrees, "trees and ", length(rules), "rules were generated initially.")
-  }
-  
-  if (length(rules) > 0) {
-    if (removeduplicates || removecomplements) {
-      rules <- delete_duplicates_complements(rules = rules, 
-                                                data = data, 
-                                                removecomplements = removecomplements, 
-                                                removeduplicates = removeduplicates, 
-                                                return.dupl.compl = TRUE)
-      complements.removed <- rules$complements.removed
-      duplicates.removed <- rules$duplicates.removed
-      rules <- rules$rules
+
+    if (verbose) {
+      cat("\nA total of", ntrees, "trees and ", length(rules), "rules were generated initially.")
     }
-  }
-    
-  if (!exists("complements.removed", inherits = FALSE)) { 
-    complements.removed <- NULL
-  }
-  if (!exists("duplicates.removed", inherits = FALSE)) {
-    duplicates.removed <- NULL
-  }
-      
-  if (verbose && (removeduplicates || removecomplements)) {
-    cat("\n\nA total of", length(duplicates.removed) + length(complements.removed), "generated rules were perfectly collinear with earlier rules and removed from the initial ensemble. \n($duplicates.removed and $complements.removed show which, if any).")
-  }
-    
-  if (verbose) {
-    cat("\n\nAn initial ensemble consisting of", length(rules), "rules was successfully created.")  
-  }
   
-  # Check if any rules were generated at all:
-  if (length(rules) == 0L) {
-    warning("No prediction rules could be derived from dataset.", immediate. = TRUE)
-    rules <- NULL
-  }
+    rules_obj <- delete_duplicates_complements(
+      rules = rules, data = data, 
+      removecomplements = removecomplements, 
+      removeduplicates = removeduplicates, 
+      return.dupl.compl = TRUE, sparse = sparse, 
+      keep_rulevars = TRUE)
   
-  if (return.dupl.compl) {
-    return(list(rules = rules, 
-                duplicates.removed = duplicates.removed, 
-                complements.removed = complements.removed))
+    #complements.removed <- rules_obj$complements.removed
+    #duplicates.removed <- rules_obj$duplicates.removed
+    #rules <- rules_obj$rules
+    #rulevars <- rules_obj$rulevars
+  
+    if (verbose && (removeduplicates || removecomplements)) 
+      cat("\n\nA total of", length(rules_obj$duplicates.removed) + length(rules_obj$complements.removed), "generated rules were perfectly collinear with earlier rules and removed from the initial ensemble. \n($duplicates.removed and $complements.removed show which, if any).")
+    
+    if (verbose)
+      cat("\n\nAn initial ensemble consisting of", length(rules_obj$rules), "rules was successfully created.")  
+    
   } else {
-    return(rules)
+    warning("No prediction rules could be derived from dataset.", immediate. = TRUE)  
+    rules_obj <- list(rules = rules,
+                      complements.removed = NULL, 
+                      duplicates.removed = NULL, 
+                      rulevars = NULL)
   }
+  
+  rules_obj
 }
 
 
@@ -1350,8 +1468,8 @@ gpe_rules_pre <- function(learnrate = .01, par.init = FALSE,
       tree.unbiased = ifelse(is.null(cl$tree.unbiased), TRUE, cl$tree.unbiased), 
       return.dupl.compl = FALSE
     )
-    rules <- do.call(pre_rules, args = pre_rules_args)
-    paste0("rTerm(", rules, ")")
+    rules_obj <- do.call(pre_rules, args = pre_rules_args)
+    paste0("rTerm(", rules_obj$rules, ")")
   }
   
   return(ret)
@@ -1373,7 +1491,7 @@ pre_rules_mixed_effects <- function(formula, data, family = "gaussian",
                                     use.grad = TRUE, verbose = FALSE, 
                                     removeduplicates = TRUE, 
                                     removecomplements = TRUE, 
-                                    par.init = FALSE) {
+                                    par.init = FALSE, sparse = FALSE) {
   
   n <- nrow(data)
   
@@ -1447,42 +1565,28 @@ pre_rules_mixed_effects <- function(formula, data, family = "gaussian",
     cat("\nA total of", ntrees, "trees and ", length(rules), "rules were generated initially.")
   }
   
-  if (length(rules) > 0) {
-    
-    if (removeduplicates || removecomplements) {
-      rules <- delete_duplicates_complements(rules = rules, 
-                                             data = data, 
-                                             removecomplements = removecomplements, 
-                                             removeduplicates = removeduplicates, 
-                                             return.dupl.compl = TRUE)
-      complements.removed <- rules$complements.removed
-      duplicates.removed <- rules$duplicates.removed
-      rules <- rules$rules
-    }
-
-    if(!exists("complements.removed", inherits = FALSE))
-      complements.removed <- NULL
-    if(!exists("duplicates.removed", inherits = FALSE))
-      duplicates.removed <- NULL
-    
-    if (verbose && (removeduplicates || removecomplements)) {
-      cat("\n\nA total of", length(duplicates.removed) + length(complements.removed), "generated rules were perfectly collinear with earlier rules and removed from the initial ensemble. \n($duplicates.removed and $complements.removed show which, if any).")
-    }
-    
-    if (verbose) {
-      cat("\n\nAn initial ensemble consisting of", length(rules), "rules was succesfully created.")  
-    }
-  }
-  # check if any rules were generated:
-  if (length(rules) == 0) {
-    warning("No prediction rules could be derived from dataset.", immediate. = TRUE)
-    rules <- NULL
-  }
+  rules_obj <- delete_duplicates_complements(
+    rules = rules, data = data, 
+    removecomplements = removecomplements, 
+    removeduplicates = removeduplicates, 
+    return.dupl.compl = TRUE, sparse = sparse, keep_rulevars = TRUE)
   
-  result <- list(rules = rules,
-                 duplicates.removed = duplicates.removed, 
-                 complements.removed = complements.removed)
-  return(result)
+  complements.removed <- rules_obj$complements.removed
+  duplicates.removed <- rules_obj$duplicates.removed
+  rules <- rules_obj$rules
+  rulevars <- rules_obj$rulevars
+  
+  if (verbose && (removeduplicates || removecomplements)) 
+    cat("\n\nA total of", length(duplicates.removed) + length(complements.removed), "generated rules were perfectly collinear with earlier rules and removed from the initial ensemble. \n($duplicates.removed and $complements.removed show which, if any).")
+  
+  if (verbose) 
+    cat("\n\nAn initial ensemble consisting of", length(rules), "rules was succesfully created.")  
+
+  # check if any rules were generated:
+  if (length(rules) == 0)
+    warning("No prediction rules could be derived from dataset.", immediate. = TRUE)
+  
+  rules_obj
 }
 
 
@@ -1506,9 +1610,9 @@ pre_rules_mixed_effects <- function(formula, data, family = "gaussian",
 #' \code{maxdepth_sampler} allows for mimicing the behavior of the
 #' orignal RuleFit implementation. In effect, the maximum tree depth is 
 #' sampled from an exponential distribution with learning rate 
-#' \eqn{\frac{1}{\bar{L}-2}}, where \eqn{(\bar{L}) \geq 2} represents the
+#' \eqn{1/(\bar{L}-2)}, where \eqn{\bar{L} \ge 2} represents the
 #' average number of terminal nodes for trees in the ensemble. See
-#' Friedman & Popescu (2008, section 3.3).
+#' Friedman & Popescu (2008, section 3.3). 
 #' @references Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
 #' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
 #' @seealso \code{\link{pre}}
@@ -1623,7 +1727,7 @@ print.pre <- function(x, penalty.par.val = "lambda.1se",
       x$glmnet.fit$lambda - penalty.par.val)))
     cat("Final ensemble with lambda = ", rf(x$glmnet.fit$lambda[lambda_ind]))
   }
-  cat("\n  number of terms = ", x$glmnet.fit$nzero[lambda_ind], 
+  cat("\n  number of terms = ", x$glmnet.fit$glmnet.fit$df[lambda_ind], 
       "\n  mean cv error (se) = ", rf(x$glmnet.fit$cvm[lambda_ind]), 
       " (", rf(x$glmnet.fit$cvsd[lambda_ind]), ")", "\n\n  cv error type : ",
       x$glmnet.fit$name, "\n\n", sep = "")
@@ -1643,6 +1747,7 @@ print.pre <- function(x, penalty.par.val = "lambda.1se",
     }
   coefs <- rbind(coefs[is_intercept,], coefs[!is_intercept,])
   
+  ## TODO: digits argument appears not to work for multivariate outcomes
   print(coefs, print.gap = 2, quote = FALSE, row.names = FALSE, digits = digits)
   invisible(coefs)
 }
@@ -1707,8 +1812,8 @@ summary.pre <- function(object, penalty.par.val = "lambda.1se", ...) {
 #' Full k-fold cross validation of a prediction rule ensemble (pre)
 #' 
 #' \code{cvpre} performs k-fold cross validation on the dataset used to create 
-#' the prediction rule ensemble, providing an estimate of predictive accuracy 
-#' on future observations.
+#' the specified prediction rule ensemble, providing an estimate of predictive 
+#' accuracy on future observations.
 #' 
 #' @param object An object of class \code{\link{pre}}.
 #' @param k integer. The number of cross validation folds to be used.
@@ -1744,7 +1849,7 @@ summary.pre <- function(object, penalty.par.val = "lambda.1se", ...) {
 #' and \code{$table} (proportion table with (mis)classification rates).
 #' @details The random sampling employed by default may yield folds including all 
 #' observations with a given level of a given factor. This results in an error, 
-#' as it requirea predictions for factor levels to be computed that were not 
+#' as it requires predictions for factor levels to be computed that were not 
 #' observed in the training data, which is impossible. By manually specifying the
 #' \code{foldids} argument, users can make sure all class levels are represented in
 #' each of the \eqn{k} training partitions. 
@@ -1801,15 +1906,16 @@ cvpre <- function(object, k = 10, penalty.par.val = "lambda.1se", pclass = .5,
       stop("Argument 'foldids' should be an integer vector, but is not.")
     } 
   }
-  
-  library(pre)
+
   ## Set up fold-ids, seeds and object for collecting CV predictions:
   if (is.null(foldids)) {
     foldids <- sample(rep(1:k, length.out = nrow(object$data)), 
                       size = nrow(object$data), replace = FALSE)
   }
   seeds <- sample(k*99, size = k)
-  y_ncol <- ifelse(object$family == "multinomial", nlevels(object$data[,object$y_names]), length(object$y_names)) 
+  y_ncol <- ifelse(object$family == "multinomial", 
+                   nlevels(object$data[,object$y_names]), 
+                   length(object$y_names)) 
   cvpreds <- replicate(n = y_ncol, rep(NA, times = nrow(object$data)))
   cl <- object$call
   cl$verbose <- FALSE
@@ -1875,14 +1981,14 @@ cvpre <- function(object, k = 10, penalty.par.val = "lambda.1se", pclass = .5,
     accuracy <- NULL
   } else if (object$family == "mgaussian") {
     y_obs <- object$data[ , object$y_names]
-    names(cvpreds) <- object$y_names
+    colnames(cvpreds) <- object$y_names
     accuracy$MSE <- data.frame(MSE = colMeans((y_obs - cvpreds)^2, na.rm = TRUE),
                                se = apply((y_obs - cvpreds)^2, 2, sd, na.rm = TRUE) / sqrt_N)
     accuracy$MAE <- data.frame(MAE = colMeans(abs(y_obs - cvpreds), na.rm = TRUE),
                                se = apply(abs(y_obs - cvpreds), 2, sd, na.rm = TRUE) / sqrt_N)
   } else if (object$family == "multinomial") {
     observed <- object$data[ , object$y_names]
-    names(cvpreds) <- levels(observed)
+    colnames(cvpreds) <- levels(observed)
     y_obs <- model.matrix( ~ observed + 0)
     colnames(y_obs) <- levels(observed)
     accuracy$SEL<- data.frame(SEL = colMeans((y_obs - cvpreds)^2, na.rm = TRUE),
@@ -1935,6 +2041,9 @@ cvpre <- function(object, k = 10, penalty.par.val = "lambda.1se", pclass = .5,
 #' @export
 coef.pre <- function(object, penalty.par.val = "lambda.1se", ...)
 {
+  
+  ## TODO: Add argument on whether learners with zero coefficients should
+  ## be included ot not
   
   ## check if proper object argument is specified:
   if(class(object) != "pre") {
@@ -2025,7 +2134,7 @@ coef.pre <- function(object, penalty.par.val = "lambda.1se", ...)
 
 
 
-#' Predicted values based on final unbiased prediction rule ensemble
+#' Predicted values based on final prediction rule ensemble
 #'
 #' \code{predict.pre} generates predictions based on the final prediction rule
 #' ensemble, for training or new (test) observations
@@ -2151,7 +2260,8 @@ predict.pre <- function(object, newdata = NULL, type = "link",
       winsfrac = winsfrac,
       x_names = object$x_names, 
       normalize = object$normalize,
-      y_names = NULL)
+      y_names = NULL,
+      confirmatory = object$call$confirmatory)
     
     newdata <- newdata$x
   }
@@ -2180,7 +2290,11 @@ predict.pre <- function(object, newdata = NULL, type = "link",
 #' ensemble (pre)
 #'
 #' \code{singleplot} creates a partial dependence plot, which shows the effect of
-#' a predictor variable on the ensemble's predictions
+#' a predictor variable on the ensemble's predictions. Note that plotting partial 
+#' dependence is computationally intensive. Computation time will increase fast 
+#' with increasing numbers of observations and variables. For large 
+#' datasets, package `plotmo` (Milborrow, 2019) provides more efficient functions 
+#' for plotting partial dependence and also supports `pre` models. 
 #'
 #' @param object an object of class \code{\link{pre}}
 #' @param varname character vector of length one, specifying the variable for
@@ -2194,24 +2308,38 @@ predict.pre <- function(object, newdata = NULL, type = "link",
 #' \code{type = "response"} gives fitted values for continuous outputs and
 #' fitted probabilities for nominal outputs. \code{type = "link"} gives fitted
 #' values for continuous outputs and linear predictor values for nominal outputs.
+#' @param ylab character. Label to be printed on the y-axis.
 #' @param ... Further arguments to be passed to 
 #' \code{\link[graphics]{plot.default}}.
 #' @details By default, a partial dependence plot will be created for each unique
 #' observed value of the specified predictor variable. When the number of unique
 #' observed values is large, this may take a long time to compute. In that case,
-#' specifying the nvals argument can substantially reduce computing time. When the
-#' nvals argument is supplied, values for the minimum, maximum, and (nvals - 2)
-#' intermediate values of the predictor variable will be plotted. Note that nvals
+#' specifying the \code{nvals} argument can substantially reduce computing time. When the
+#' \code{nvals} argument is supplied, values for the minimum, maximum, and \code{(nvals - 2)}
+#' intermediate values of the predictor variable will be plotted. Note that \code{nvals}
 #' can be specified only for numeric and ordered input variables. If the plot is
 #' requested for a nominal input variable, the \code{nvals} argument will be
-#' ignored and a warning is printed.
+#' ignored and a warning printed.
+#' 
+#' See also section 8.1 of Friedman & Popescu (2008).
+#' 
+#' @references Fokkema, M. (2018). Fitting prediction rule ensembles with R package pre.
+#' \url{https://arxiv.org/abs/1707.07149}.
+#' 
+#' Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
+#' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
+#' 
+#' Milborrow, S. (2019). plotmo: Plot a model's residuals, response, and partial 
+#' dependence plots. \url{https://CRAN.R-project.org/package=plotmo}
+#' 
 #' @examples \donttest{set.seed(42)
 #' airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),])
 #' singleplot(airq.ens, "Temp")}
 #' @seealso \code{\link{pre}}, \code{\link{pairplot}}
 #' @export
 singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
-                       nvals = NULL, type = "response", ...)
+                       nvals = NULL, type = "response", ylab = "predicted", 
+                       ...)
 {
  
   ## Check family:
@@ -2277,7 +2405,7 @@ singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
   # create plot:
   plot(aggregate(
     exp_dataset$predy, by = exp_dataset[varname], data = exp_dataset, FUN = mean),
-    type = "l", ylab = "predicted y", xlab = varname, ...)
+    type = "l", ylab = ylab, xlab = varname, ...)
 }
 
 
@@ -2288,7 +2416,11 @@ singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
 #' rule ensemble (pre)
 #'
 #' \code{pairplot} creates a partial dependence plot to assess the effects of a
-#' pair of predictor variables on the predictions of the ensemble
+#' pair of predictor variables on the predictions of the ensemble. Note that plotting 
+#' partial dependence is computationally intensive. Computation time will increase 
+#' fast with increasing numbers of observations and variables. For large 
+#' datasets, package `plotmo` (Milborrow, 2019) provides more efficient functions 
+#' for plotting partial dependence and also supports `pre` models. 
 #'
 #' @param object an object of class \code{\link{pre}}
 #' @param varnames character vector of length two. Currently, pairplots can only
@@ -2324,6 +2456,8 @@ singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
 #' will be plotted. Furthermore, if none of the variables specified appears in
 #' the final prediction rule ensemble, an error will occur.
 #' 
+#' See also section 8.1 of Friedman & Popescu (2008).
+#' 
 #' @note Function \code{pairplot} uses package akima to construct interpolated 
 #' surfaces and  has an ACM license that restricts applications to non-commercial 
 #' usage, see 
@@ -2333,9 +2467,17 @@ singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
 #' airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),])
 #' pairplot(airq.ens, c("Temp", "Wind"))}
 #' @export
+#' @references Fokkema, M. (2018). Fitting prediction rule ensembles with R package pre.
+#' \url{https://arxiv.org/abs/1707.07149}.
+#' 
+#' Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
+#' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
+#' 
+#' Milborrow, S. (2019). plotmo: Plot a model's residuals, response, and partial 
+#' dependence plots. \url{https://CRAN.R-project.org/package=plotmo}
 #' @import graphics
 #' @seealso \code{\link{pre}}, \code{\link{singleplot}} 
-#' #' @export
+#' @export
 pairplot <- function(object, varnames, type = "both", 
                      penalty.par.val = "lambda.1se", 
                      nvals = c(20, 20), pred.type = "response", ...)
@@ -2446,8 +2588,8 @@ pairplot <- function(object, varnames, type = "both",
 }
 
 
-#' Calculate importances of baselearners (rules and linear terms) and input
-#' variables in a prediction rule ensemble (pre)
+#' Calculate importances of baselearners and input variables in a prediction 
+#' rule ensemble (pre)
 #'
 #' \code{importance} calculates importances for rules, linear terms and input
 #' variables in the prediction rule ensemble (pre), and creates a bar plot 
@@ -2475,7 +2617,9 @@ pairplot <- function(object, varnames, type = "both",
 #' \code{plot = TRUE}.
 #' @param diag.xlab logical. Should variable names be printed diagonally (that
 #' is, in a 45 degree angle)? Alternatively, variable names may be printed 
-#' vertically by specifying \code{diag.xlab = FALSE, las = 2}.
+#' vertically by specifying \code{diag.xlab = FALSE} and \code{las = 2}.
+#' @param abbreviate integer or logical. Number of characters to abbreviate 
+#' x axis names to. If \code{FALSE}, no abbreviation is performed. 
 #' @param diag.xlab.hor numeric. Horizontal adjustment for lining up variable
 #' names with bars in the plot if variable names are printed diagonally.
 #' @param diag.xlab.vert positive integer. Vertical adjustment for position
@@ -2483,11 +2627,18 @@ pairplot <- function(object, varnames, type = "both",
 #' character spaces added after variable names. 
 #' @param cex.axis numeric. The magnification to be used for axis annotation
 #' relative to the current setting of \code{cex}.
+#' @param legend logical or character. Should legend be plotted for multinomial
+#' or multivariate responses and if so, where? Defaults to \code{"topright"}, 
+#' which puts the legend in the top-right corner of the plot. Alternatively, 
+#' \code{"bottomright"}, \code{"bottom"}, \code{"bottomleft"}, \code{"left"}, 
+#' \code{"topleft"}, \code{"top"}, \code{"topright"}, \code{"right"}, 
+#' \code{"center"} and \code{FALSE} (which omits the legend) can be specified.
 #' @param ... further arguments to be passed to \code{barplot} (only used
 #' when \code{plot = TRUE}).
 #' @return A list with two dataframes: \code{$baseimps}, giving the importances 
 #' for baselearners in the ensemble, and \code{$varimps}, giving the importances 
 #' for all predictor variables.
+#' @details See also sections 6 and 7 of Friedman & Popecus (2008).
 #' @examples \donttest{set.seed(42)
 #' airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),])
 #' # calculate global importances:
@@ -2496,14 +2647,19 @@ pairplot <- function(object, varnames, type = "both",
 #' importance(airq.ens, global = FALSE)
 #' # calculate local importances (custom: over 25% lowest predicted values):
 #' importance(airq.ens, global = FALSE, quantprobs = c(0, .25))}
+#' @references Fokkema, M. (2018). Fitting prediction rule ensembles with R package pre.
+#' \url{https://arxiv.org/abs/1707.07149}.
+#' 
+#' Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
+#' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
 #' @seealso \code{\link{pre}}
 #' @export
 importance <- function(object, standardize = FALSE, global = TRUE,
                        quantprobs = c(.75, 1), penalty.par.val = "lambda.1se", 
                        round = NA, plot = TRUE, ylab = "Importance",
-                       main = "Variable importances", diag.xlab = TRUE, 
-                       diag.xlab.hor = 0, diag.xlab.vert = 2,
-                       cex.axis = 1, ...)
+                       main = "Variable importances", abbreviate = 10L,
+                       diag.xlab = TRUE, diag.xlab.hor = 0, diag.xlab.vert = 2,
+                       cex.axis = 1, legend = "topright", ...)
 {
 
   if (!inherits(object, what = "pre")) {
@@ -2614,9 +2770,6 @@ importance <- function(object, standardize = FALSE, global = TRUE,
         baseimps$imp <- baseimps$imp / sd_y
       }
     }
-    
-    
-    ## Step 2: Calculate variable importances:
 
     ## Remove nonzero terms:
     if (object$family %in% c("mgaussian", "multinomial")) {
@@ -2641,7 +2794,7 @@ importance <- function(object, standardize = FALSE, global = TRUE,
     }
     
     
-    ## Step 3: Calculate variable importances:
+    ## Step 2: Calculate variable importances:
     
     if (object$family %in% c("mgaussian", "multinomial")) {
       varimps <- data.frame(varname = object$x_names, stringsAsFactors = FALSE)
@@ -2691,10 +2844,15 @@ importance <- function(object, standardize = FALSE, global = TRUE,
     }
     
     
-    ## Step 4: Return (and plot) importances:
+    ## Step 3: Return (and plot) importances:
+    
+
     
     if (object$family %in% c("mgaussian", "multinomial")) {
-      varimps <- varimps[rowSums(varimps[ , gsub("coefficient", "importance", coef_inds)]) != 0, ]   
+      varimps <- varimps[rowSums(varimps[ , gsub("coefficient", "importance", coef_inds)]) != 0, ]
+      ord <- order(rowSums(varimps[ , gsub("coefficient", "importance", coef_inds)]), 
+                   decreasing = TRUE, method = "radix")
+      varimps <- varimps[ord, ]
     } else {
       baseimps <- baseimps[order(baseimps$imp, decreasing = TRUE, method = "radix"), ]
       varimps <- varimps[order(varimps$imp, decreasing = TRUE, method = "radix"), ]
@@ -2702,17 +2860,29 @@ importance <- function(object, standardize = FALSE, global = TRUE,
     }
     
     if (plot & nrow(varimps) > 0) {
+      if (is.character(legend)) {
+        args.legend <- list(x = legend)
+        legend.text <- TRUE
+      } else {
+        legend.text <- NULL
+        args.legend <- NULL
+      }
       if (object$family %in% c("mgaussian", "multinomial")) {
         plot_varimps <- t(varimps[ , gsub("coefficient", "importance" , coef_inds)])
-        colnames(plot_varimps) <- varimps$varname
+        colnames(plot_varimps) <- abbreviate(varimps$varname, minlength = abbreviate)
         rownames(plot_varimps) <- gsub("coefficient.", "" , coef_inds)
         if (diag.xlab) {
           xlab.pos <- barplot(plot_varimps, beside = TRUE, ylab = ylab, 
                               names.arg = rep("", times = ncol(plot_varimps)), 
-                              main = main, cex.axis = cex.axis, legend.text = TRUE, ...)
+                              main = main, cex.axis = cex.axis, 
+                              legend.text = legend.text, 
+                              args.legend = args.legend, ...)
           xlab.pos <- xlab.pos[nrow(xlab.pos),]
           ## add specified number of trailing spaces to variable names:
           plotnames <- varimps$varname
+          if (is.numeric(abbreviate) && abbreviate > 0) {
+            plotnames <- abbreviate(plotnames, minlength = abbreviate)
+          }
           if (diag.xlab.vert > 0) {
             for (i in 1:diag.xlab.vert) {
               plotnames <- paste0(plotnames, " ")
@@ -2722,7 +2892,8 @@ importance <- function(object, standardize = FALSE, global = TRUE,
                labels = plotnames, cex = cex.axis)
         } else {
           barplot(plot_varimps, beside = TRUE, main = main, ylab = ylab, 
-                  legend.text = TRUE, ...)
+                  legend.text = legend.text, args.legend = args.legend,
+                  ...)
         }
       } else {
         if (diag.xlab) {
@@ -2730,6 +2901,9 @@ importance <- function(object, standardize = FALSE, global = TRUE,
                               main = main, cex.axis = cex.axis, ...)
           ## add specified number of trailing spaces to variable names:
           plotnames <- varimps$varname
+          if (is.numeric(abbreviate) && abbreviate > 0) {
+            plotnames <- abbreviate(plotnames, minlength = abbreviate)
+          }
           if (diag.xlab.vert > 0) {
             for (i in 1:diag.xlab.vert) {
               plotnames <- paste0(plotnames, " ")
@@ -2738,7 +2912,11 @@ importance <- function(object, standardize = FALSE, global = TRUE,
           text(xlab.pos + diag.xlab.hor, par("usr")[3], srt = 45, adj = 1, xpd = TRUE, 
                labels = plotnames, cex = cex.axis)
         } else {
-          barplot(height = varimps$imp, names.arg = varimps$varname, ylab = ylab,
+          plotnames <- varimps$varname
+          if (is.numeric(abbreviate) && abbreviate > 0) {
+            plotnames <- abbreviate(plotnames, minlength = abbreviate)
+          }
+          barplot(height = varimps$imp, names.arg = plotnames, ylab = ylab,
                 main = main, ...)
         }
       }
@@ -2790,7 +2968,18 @@ importance <- function(object, standardize = FALSE, global = TRUE,
 #' airq.ens <- pre(Ozone ~ ., data=airquality[complete.cases(airquality),])
 #' nullmods <- bsnullinteract(airq.ens)
 #' interact(airq.ens, nullmods = nullmods, col = c("#7FBFF5", "#8CC876"))}
-#' @details Computationally intensive.
+#' @details Note that computation of bootstrapped null interaction models is 
+#' computationally intensive. The default number of samples is set to 10,
+#' but for reliable results argument \code{nsamp} should be set to a higher
+#' value (e.g., \eqn{\ge 100}). 
+#' 
+#' See also section 8.3 of Friedman & Popescu (2008).
+#' 
+#' @references Fokkema, M. (2018). Fitting prediction rule ensembles with R package pre.
+#' \url{https://arxiv.org/abs/1707.07149}.
+#' 
+#' Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
+#' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
 #' @seealso \code{\link{pre}}, \code{\link{interact}} 
 #' @export
 bsnullinteract <- function(object, nsamp = 10, parallel = FALSE,
@@ -2988,11 +3177,20 @@ Hsquaredj <- function(object, varname, k = 10, penalty.par.val = NULL, verbose =
 #' interaction effect for each of the input variables. 
 #' 
 #' Note that the error rates of null hypothesis tests of interaction effects 
-#' have not yet been studied in detail, but likely depend on the number of 
-#' generated bootstrapped null interaction models as well as the complexity of 
-#' the fitted ensembles. Users are therefore advised to test for the presence 
-#' of interaction effects by setting the \code{nsamp} argument of the function 
-#' \code{bsnullinteract} \eqn{\geq 100}.
+#' have not yet been studied in detail, but results are likely to get more 
+#' reliable when the number of bootstrapped null interaction models is larger.
+#' The default of the \code{bsnullinteract} function is to generate 10 
+#' bootstrapped null interaction datasets, to yield shorter computation times.
+#' To obtain a more reliable result, however, users are advised to
+#' set the \code{nsamp} argument \eqn{\ge 100}.
+#' 
+#' See also section 8 of Friedman & Popescu (2008).
+#' 
+#' @references Fokkema, M. (2018). Fitting prediction rule ensembles with R package pre.
+#' \url{https://arxiv.org/abs/1707.07149}.
+#' 
+#' Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
+#' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
 #' @seealso \code{\link{pre}}, \code{\link{bsnullinteract}} 
 #' @export
 interact <- function(object, varnames = NULL, nullmods = NULL, 
@@ -3554,4 +3752,261 @@ corplot <- function(object, penalty.par.val = "lambda.1se", colors = NULL,
               breaks = legend.breaks)
   axis(4, at = legend.breaks, las = 2)
   return(invisible(cormat))
+}
+
+
+
+#' Explain predictions from final prediction rule ensemble
+#'
+#' \code{explain} shows which rules apply to which observations and visualizes
+#' the contribution of rules and linear predictors to the predicted values
+#'
+#' @param object object of class \code{\link{pre}}.
+#' @param newdata optional dataframe of new (test) observations, including all
+#' predictor variables used for deriving the prediction rule ensemble.
+#' @inheritParams print.pre
+#' @param plot logical. Should explanations be plotted?
+#' @param intercept logical. Specifies whether intercept should be included in
+#' explaining predictions.
+#' @param center.linear logical. Specifies whether linear terms should be
+#' centered with respect to the training sample mean before computing their 
+#' contribution to the predicted value.
+#' @param pred.type character. Specifies the type of predicted values provided
+#' in the plot(s).
+#' @param plot.max.nobs numeric. Specifies maximum number of observations
+#' for which explanations will be plotted. The default \code{4} plots the
+#' explanation for the first four observations supplied in \code{newdata}.
+#' @param plot.dim numeric vector of length 2. Specifies the number of rows and
+#' columns in the resulting plot.
+#' @param cex numeric. Specifies the relative text size of title, tick and axis
+#' labels.
+#' @param plot.obs.names logical vector of length 1, NULL, or character vector 
+#' of length \code{nrow(data)} supplying the names that should be used for
+#' individual observations' plots. If \code{TRUE} (default), 
+#' \code{rownames(newdata)} will be used as titles. If \code{NULL},
+#' \code{paste("Observation", 1:nrow(newdata))} will be used as titles. If 
+#' \code{FALSE}, no titles will be plotted.
+#' @param digits integer. Specifies the number of digits used in depcting the
+#' predicted values in the plot.
+#' @param bar.col character vector of length two. Specifies the colors to be used for
+#' plotting the positive and negative contributions to the predictions, respectively.
+#' @param rule.col character. Specifies the color to be used for plotting the rule
+#' descriptions. If \code{NULL}, rule descriptions are not plotted.
+#' @param ylab character. Specifies the label for the horizonantal (y-) axis.
+#' @details Provides a graphical depiction of the contribution of rules and
+#' linear terms to the individual predictions (if \code{plot = TRUE}.
+#' Invisibly returns a list with objects \code{predictors} and
+#' \code{contribution}. \code{predictors} contains the values of the rules and
+#' linear terms for each observation in \code{newdata}, for those rules
+#' and linear terms included in the final ensemble with the specified
+#' value of \code{penalty.par.val}. \code{contribution} contains the
+#' values of \code{predictors}, multiplied by the estimated values
+#' of the coefficients in the final ensemble selected with the
+#' specified value of \code{penalty.par.val}.
+#' All contributions are calculated w.r.t. the intercept, by default.
+#' Thus, if a given rule applies to an observation in \code{newdata}, 
+#' the contribution of that rule equals the estimated coefficient of
+#' that rule. If a given rule does not apply to an observation in
+#' \code{newdata}, the contribution of that rule equals 0. 
+#' For linear terms, contributions can be centered, or not (the default).
+#' Thus, by default the contribution of a linear terms for an 
+#' observation in \code{newdata} equals the obeservation's value of the 
+#' linear term, times the estimated coefficient of the linear term.
+#' If \code{center.linear = TRUE}, the contribution of a linear term 
+#' for an observation in \code{newdata} equals (the value of the linear
+#' temr, minus the mean value of the linear term in the training data)
+#' times the estimated coefficient for the linear term.
+#' @examples \donttest{airq <- airquality[complete.cases(airquality), ]
+#' set.seed(1)
+#' train <- sample(1:nrow(airq), size = 100)
+#' set.seed(42)
+#' airq.ens <- pre(Ozone ~ ., data = airq[train,])
+#' airq.ens.exp <- explain(airq.ens, newdata = airq[-train,])
+#' airq.ens.exp$predictors
+#' airq.ens.exp$contribution
+#' 
+#' ## Fit PRE with three trees and lower penalty parameter value,
+#' ## to allow linear terms to appear in final ensemble:
+#' set.seed(42)
+#' airq.ens2 <- pre(Ozone ~ ., data = airq[train,], ntrees = 3L)
+#' ## Compared to intercept, Month has negative and 
+#' ## Day has positive contribution:
+#' explain(airq.ens2, newdata = airq[-train,][1:2,], 
+#'         penalty.par.val = "lambda.min")$contribution
+#' ## Compared with training data means, Month has positive 
+#' ## and Day has negative contribution: 
+#' explain(airq.ens2, newdata = airq[-train,][1:2,], 
+#'         penalty.par.val = "lambda.min", center.linear = TRUE)$contribution
+#' }
+#' @seealso \code{\link{pre}}, \code{\link{plot.pre}},
+#' \code{\link{coef.pre}}, \code{\link{importance}}, \code{\link{cvpre}},
+#' \code{\link{interact}}, \code{\link{print.pre}}
+#' @export
+explain <- function(object, newdata, penalty.par.val = "lambda.1se",
+                    plot = TRUE, intercept = FALSE, center.linear = FALSE,
+                    plot.max.nobs = 4, plot.dim = c(2, 2),
+                    plot.obs.names = TRUE, pred.type = "response", 
+                    digits = 3L,  cex = .8,
+                    ylab = "Contribution to linear predictor",
+                    bar.col = c("#E495A5", "#39BEB1"),
+                    rule.col = "darkgrey") {
+  
+  ## check arguments:
+  if (!inherits(object, what = "pre")) {
+    stop("Argument object should specfify an object of class 'pre'.")
+  }
+  if (!is.data.frame(newdata)) {
+    stop("Argument newdata should specify a data frame.")
+  }
+  if (!(is.logical(intercept) || length(intercept) != 1L)) {
+    stop("Argument intercept should be a logical vector of length 1.")
+  }
+  if (!(is.logical(plot) || length(plot) != 1L)) {
+    stop("Argument plot should be a logical vector of length 1.")
+  }
+  
+  preds <- round(predict(object, newdata = newdata, type = pred.type,
+                         penalty.par.val = penalty.par.val), digits = digits)
+  
+  ## Prepare newdata:
+  winsfrac <- (object$call)$winsfrac
+  if (is.null(winsfrac)) winsfrac <- formals(pre)$winsfrac
+  
+  ## Check if variable names and classes are the same in newdata as in object$data:
+  if (!all(object$x_names %in% names(newdata))) {
+    newdata <- model.frame(as.Formula((object$call)$formula), data = newdata, 
+                           rhs = NULL, lhs = 0, na.action = NULL)
+  } else {
+    newdata <- newdata[ , object$x_names]
+  }
+  
+  ## Coerce character and logical variables to factors:
+  if (any(char_names <- sapply(newdata, is.character))) {
+    char_names <- names(newdata)[char_names]
+    data[ , char_names] <- sapply(newdata[ , char_names], factor)
+  }
+  if (any(logic_names <- sapply(newdata, is.logical))) {
+    logic_names <- names(newdata)[logic_names]
+    newdata[ , logic_names] <- sapply(newdata[ , logic_names], factor)
+  } 
+  
+  ## Coerce ordered categorical variables to numeric, if necessary:
+  if (if (is.null((object$call)$ordinal)) {
+    formals(pre)$ordinal
+  } else {
+    (object$call)$ordinal
+  }) {
+    if (any(ord_var_inds <- sapply(newdata, is.ordered))) {
+      newdata[ , ord_var_inds] <- sapply(newdata[ , ord_var_inds], as.numeric)
+    }
+  }
+  
+  if (any(is.na(newdata))) {
+    newdata <- newdata[complete.cases(newdata),]
+    warning("Some observations in newdata have missing predictor variable values and will be removed.", immediate. = TRUE)
+  }
+  
+  ## Check and set factor levels of newdata to variable levels in object$data:
+  if (any(factor_inds <- sapply(newdata, is.factor))) {
+    for (i in names(newdata)[factor_inds]) {
+      if (all(levels(newdata[ , i]) %in% levels(object$data[ , i]))) {
+        levels(newdata[ , i]) <- levels(object$data[ , i])
+      } else {
+        stop("Variable ", i, " has levels not present in training data. Cannot compute predictions.")
+      }
+    }
+  }
+  
+  newdata <- get_modmat(
+    wins_points = object$wins_points, 
+    x_scales = object$x_scales, 
+    formula = object$formula, 
+    data = newdata, 
+    rules = if (object$type == "linear" || is.null(object$rules)) {NULL} else {
+      structure(object$rules$description, names = object$rules$rule)}, 
+    type = object$type, 
+    winsfrac = winsfrac,
+    x_names = object$x_names, 
+    normalize = object$normalize,
+    y_names = NULL,
+    confirmatory = object$call$confirmatory)
+  
+  newdata <- newdata$x
+  
+  invisible(capture.output(
+    rules <- print(object, penalty.par.val = penalty.par.val)))
+
+  newdata <- newdata[, rules$rule[-which(rules$rule == "(Intercept)")]]
+  if (intercept) {
+    newdata <- cbind(1, newdata)
+    colnames(newdata)[1] <- "(Intercept)"
+  } else {
+    rules <- rules[-which(rules$rule == "(Intercept)"),]
+  }
+
+  linear_terms <- rules$rule[rules$rule %in% object$x_names]
+  if (length(linear_terms) > 0) {
+    means <- colMeans(object$modmat[, linear_terms])  
+  }
+  if (center.linear) {
+    if (length(linear_terms) > 0) {
+      newdata[, linear_terms] <- 
+        t(apply(newdata[, linear_terms], 1, function(x) x - means))
+    }
+  }
+  
+  explanation <- apply(newdata, 1, function(x) x*rules$coefficient)
+  rownames(explanation) <- rules$rule
+
+  plot_func <- function(explanation, plotname, pred, maxval) {
+    barplot(explanation,
+            col = ifelse(explanation < 0, bar.col[1], bar.col[2]),
+            main = ifelse(is.null(plotname),  
+                          paste0("\n\npredicted: ", pred),
+                          paste0(plotname, "\n\npredicted: ", pred)),
+            xlab = ylab,
+            xlim = c(-maxval, maxval), horiz = TRUE, las = 1,
+            cex.axis = cex, cex.names = cex, cex.main = cex, cex.lab = cex)
+  }
+  maxval <- max(abs(min(explanation)), max(explanation))
+
+  
+  if (is.null(plot.obs.names)) {
+    plot.obs.names <- paste("Observation", 1:nrow(newdata))
+  } else if (is.logical(plot.obs.names)) {
+    if (plot.obs.names) {
+      plot.obs.names <- rownames(newdata)
+    } else {
+      plot.obs.names <- NULL
+    }
+  } else if (is.character(plot.obs.names)) {
+    plot.obs.names <- rep_len(plot.obs.names, length.out = nrow(newdata))
+  }
+
+  par(mfrow = plot.dim)
+  for (i in 1:min(nrow(newdata), plot.max.nobs)) {
+    midpoints <- plot_func(explanation[ , i], plot.obs.names[i], preds[i], maxval)
+    labels <- rules$description
+    if (length(linear_terms) > 0) {
+      linear_term_ids <- which(rules$rule %in% linear_terms)
+      for (j in linear_term_ids) {
+        if (center.linear) {
+          labels[j] <- paste0(rules$rule[j], " = ", 
+                              round(newdata[i, j], digits = digits), 
+                              " (centered)")          
+        } else {
+          labels[j] <- paste0(rules$rule[j], " = ", 
+                              round(newdata[i, j], digits = digits), 
+                              " (mean = ", 
+                              round(means[rules$rule[j]], digits = digits), ")")
+        }
+      }
+    }
+    if (!is.null(rule.col)) {
+      text(y = midpoints, x = -maxval, labels = labels, cex = cex,
+         col = rule.col, pos=4)
+    }
+  }
+  
+  return(list(predictors = newdata, contribution = explanation))
 }
