@@ -29,16 +29,24 @@ x <- airq[,-1]
 
 ## Apply caret with only pre's default settings (trControl and ntrees argument
 ## are employed here only to reduce computation time):
+
+# use default S3 method of train:
 set.seed(42)
 prefit1 <- train(x = x, y = y, method = caret_pre_model,
                  trControl = trainControl(number = 1),
-                 ntrees = 5L)
+                 ntrees = 25L)
 prefit1
+
+# use formula method for train:
+set.seed(42)
+prefit.f <- train(Ozone ~ ., data = airq, method = caret_pre_model,
+                  trControl = trainControl(number = 1),
+                  ntrees = 25L)
+prefit.f
 
 ## Create custom tuneGrid:
 set.seed(42)
 tuneGrid <- caret_pre_model$grid(x = x, y = y,
-                                 use.grad = c(TRUE, FALSE),
                                  maxdepth = 3L:5L,
                                  learnrate = c(.01, .1),
                                  penalty.par.val = c("lambda.1se", "lambda.min"))
@@ -46,16 +54,13 @@ tuneGrid
 ## Apply caret (again, ntrees and trControl set only to reduce computation time):
 prefit2 <- train(x = x, y = y, method = caret_pre_model,
                  trControl = trainControl(number = 1),
-                 tuneGrid = tuneGrid)
+                 tuneGrid = tuneGrid, ntrees = 25L)
 prefit2
 
 ## Get best tuning parameter values:
 prefit2$bestTune
 ## Get predictions from model with best tuning parameters:
-predict(prefit2, newdata = x[1:10,])
-## Predictors included in model with best tuning parameter values:
-predictors(prefit2)
-varImp(prefit2)
+predict(prefit2, newdata = x[1:10, ])
 plot(prefit2)
 
 ## Obtain tuning grid through random search over the tuning parameter space:
@@ -65,14 +70,14 @@ tuneGrid2
 set.seed(42)
 prefit3 <- train(x = x, y = y, method = caret_pre_model,
                  trControl = trainControl(number = 1, verboseIter = TRUE),
-                 tuneGrid = tuneGrid2, ntrees = 5L)
+                 tuneGrid = tuneGrid2, ntrees = 25L)
 prefit3
 
 ## Count response:
 set.seed(42)
 prefit4 <- train(x = x, y = y, method = caret_pre_model,
                  trControl = trainControl(number = 1),
-                 ntrees = 5L, family = "poisson")
+                 ntrees = 25L, family = "poisson")
 prefit4
 
 ## Binary factor response:
@@ -80,7 +85,7 @@ y_bin <- factor(airq$Ozone > mean(airq$Ozone))
 set.seed(42)
 prefit5 <- train(x = x, y = y_bin, method = caret_pre_model,
                  trControl = trainControl(number = 1),
-                 ntrees = 5L, family = "binomial")
+                 ntrees = 25L, family = "binomial")
 prefit5
 
 ## Factor response with > 2 levels:
@@ -89,7 +94,7 @@ y_multin <- factor(airq$Month)
 set.seed(42)
 prefit6 <- train(x = x_multin, y = y_multin, method = caret_pre_model,
                  trControl = trainControl(number = 1),
-                 ntrees = 5L, family = "multinomial")
+                 ntrees = 25L, family = "multinomial")
 prefit6
 }
 }

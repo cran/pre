@@ -1,11 +1,11 @@
-09833a62f9cf8e9dfa2804cac9c1474f *DESCRIPTION
+5588cb35f3a9eea5abe032e285487b85 *DESCRIPTION
 c66480b53eb05ce6198fdae7d066307a *NAMESPACE
-d20a7fe972f13cd35b329e6362c1e476 *NEWS
-2ad292d66efd8ae4db6c2048255a281b *R/caret_pre_model.R
+9c230001cd7e1798ead016b6c7aaf3a7 *NEWS
+42fbe8c69791adfc6ffa9b4e51a081da *R/caret_pre_model.R
 af1028e46767b8706f0532a13027e92f *R/data.R
 f3665e2215de224ad98b73798e9006f6 *R/gpe.R
 9e4003f79b0c478b6850a3d7b526daaf *R/gpe_miscs.R
-02fbd11eca04f9933b8a897df6a93848 *R/pre.R
+047b041b6f17a65cc2d653ad0eb9eb22 *R/pre.R
 83e0175919f2c750e568a3a4541c3cad *R/utils.R
 d668d19d32ea6fab00e395981df4791d *README.md
 dfec38939b7820f7c50a09f5bd21b611 *data/carrillo.RData
@@ -19,7 +19,7 @@ babd4773a8e3caa82bb9c938f030512c *inst/README-figures/README-singleplot-1.png
 6a7bb7ce90745ffe5b129f3eb4c95e0a *inst/README-figures/README-unnamed-chunk-11-1.png
 2ea41b9b2fbad7f53b3e5ab729daa360 *inst/bib_style.csl
 25887a79f030f186e533b28ec3b40aff *man/bsnullinteract.Rd
-f4a21b46ea6b8eea0f5784d616ea1c55 *man/caret_pre_model.Rd
+debd3aba41bb9f390f5fed151f1a3657 *man/caret_pre_model.Rd
 7f12bfa5064431d428269ece4ccadcf0 *man/carrillo.Rd
 19819b231184db070a83d6467e921c46 *man/coef.gpe.Rd
 de264c13e30d59d213d2ec8199c4480d *man/coef.pre.Rd
@@ -52,7 +52,7 @@ fb98e0f54c5d2a5a7125582135684aad *tests/testthat/helper.R
 cb372e7a03a8bf8b7e641c0dbe3dc071 *tests/testthat/previous_results/airquality_preds.RDS
 c030eab5f9c588b005e557bb61339e35 *tests/testthat/previous_results/airquality_print_output.RDS
 85cfb78ccfa4dfe7daeddfd2f343842b *tests/testthat/previous_results/airquality_print_output_less_digits.RDS
-7cc4b5b8cd0ffdead0ff2e4a29160ed1 *tests/testthat/previous_results/airquality_w_bsnullinteract.RDS
+9926a8477739e13271810d42ebf66fb7 *tests/testthat/previous_results/airquality_w_bsnullinteract.RDS
 ce4e833caa2640ee54d3244ce5a7ac1c *tests/testthat/previous_results/airquality_w_importance1.RDS
 0e27bd001b9002047ed5c6529d1fc3b3 *tests/testthat/previous_results/airquality_w_importance2.RDS
 514807f8aa385f50fd99a7d8a5af92fc *tests/testthat/previous_results/airquality_w_importance3.RDS
@@ -106,5 +106,5 @@ c7fffc112f59d860d8159eff48fae19f *tests/testthat/previous_results/pre_summary.RD
 7d66b01c3dbd7f86482dac3e0b9a079b *tests/testthat/test_gpe.R
 056ca3cc27fbc03ec2c1b85f979d37b1 *tests/testthat/test_gpe_misc.R
 4fede84e3b37d9130f1fc845fc7cebde *tests/testthat/test_partykit_skins.R
-dea3ef263d7cbc5b8edbab09c1eed5ed *tests/testthat/test_pre_misc.R
+9d73dfa7b9779b0de47702c707ea161c *tests/testthat/test_pre_misc.R
 fe65aa15b6a9c9ff3dfa14766c75b3a8 *tests/testthat/tests_pre.R
