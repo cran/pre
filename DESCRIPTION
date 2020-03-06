@@ -1,6 +1,6 @@
 Package: pre
 Title: Prediction Rule Ensembles
-Version: 0.7.2
+Version: 1.0.0
 Authors@R: c(person("Marjolein", "Fokkema", role = c("aut", "cre"), email = 
   "m.fokkema@fsw.leidenuniv.nl"), person(given = "Benjamin", 
   family = "Christoffersen", role = "aut", email = "boennecd@gmail.com"))
@@ -25,8 +25,8 @@ Suggests: akima, datasets, doParallel, foreach, glmertree, grid,
 License: GPL-2 | GPL-3
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.0.0
+RoxygenNote: 7.0.2
 NeedsCompilation: no
-Packaged: 2019-11-28 00:21:51 UTC; fokkemam
+Packaged: 2020-03-05 16:33:40 UTC; fokkemam
 Repository: CRAN
-Date/Publication: 2019-11-29 09:10:10 UTC
+Date/Publication: 2020-03-06 09:20:09 UTC
