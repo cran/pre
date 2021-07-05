@@ -115,10 +115,15 @@ importance(airq.ens, global = FALSE, quantprobs = c(0, .25))}
 \references{
 Fokkema, M. (2020). Fitting prediction rule ensembles with R 
 package pre. \emph{Journal of Statistical Software, 92}(12), 1-30.
-\url{https://doi.org/10.18637/jss.v092.i12}
+\doi{10.18637/jss.v092.i12}
+
+Fokkema, M. & Strobl, C. (2020). Fitting prediction rule ensembles to psychological 
+research data: An introduction and tutorial. \emph{Psychological Methods 25}(5), 
+636-652. \doi{10.1037/met0000256}, \url{https://arxiv.org/abs/1907.05302}
 
 Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
-via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
+via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954 
+\doi{10.1214/07-AOAS148}.
 }
 \seealso{
 \code{\link{pre}}

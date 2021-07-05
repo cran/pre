@@ -184,8 +184,8 @@ prediction of a continuous, binary, count, multinomial, multivariate
 continuous or survival response.
 }
 \details{
-Note that obervations with missing values will be removed prior to 
-analysis.
+Note: obervations with missing values will be removed prior to 
+analysis (and a warning issued).
 
 In some cases, duplicated variable names may appear in the model.
 For example, the first variable is a factor named 'V1' and there are also
@@ -237,6 +237,9 @@ TRUE \tab FALSE	\tab >0 \tab binomial	  \tab rpart \tab Single, factor with 2 le
 TRUE \tab FALSE	\tab >0 \tab poisson	  \tab rpart \tab Single, integer \cr
 TRUE \tab FALSE \tab >0 \tab cox         \tab rpart \tab Object of class 'Surv'
 }
+
+If an error along the lines of 'factor ... has new levels ...' is encountered, 
+consult \code{?rare_level_sampler} for explanation and solutions.
 }
 \note{
 Parts of the code for deriving rules from the nodes of trees was copied 
@@ -292,13 +295,17 @@ count.ens}
 \references{
 Fokkema, M. (2020). Fitting prediction rule ensembles with R 
 package pre. \emph{Journal of Statistical Software, 92}(12), 1-30.
-\url{https://doi.org/10.18637/jss.v092.i12}
+\doi{10.18637/jss.v092.i12}
+
+Fokkema, M. & Strobl, C. (2020). Fitting prediction rule ensembles to psychological 
+research data: An introduction and tutorial. \emph{Psychological Methods 25}(5), 
+636-652. \doi{10.1037/met0000256}, \url{https://arxiv.org/abs/1907.05302}
 
 Friedman, J. H. (2001). Greedy function approximation: a gradient boosting 
 machine. \emph{The Annals of Applied Statistics, 29}(5), 1189-1232.
 
 Friedman, J. H., & Popescu, B. E. (2008). Predictive learning via rule 
-ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
+ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954, \doi{10.1214/07-AOAS148}.
 
 Hothorn, T., & Zeileis, A. (2015). partykit: A modular toolkit for recursive 
 partytioning in R. \emph{Journal of Machine Learning Research, 16}, 3905-3909.

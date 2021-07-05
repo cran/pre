@@ -1,4 +1,4 @@
-## TODO: Implement foward selection based on AIC (and BIC)?
+## TODO: Implement forward selection based on AIC (and BIC)?
 ## TODO: Implement functionality for missing-in-attributes approach for missing values
 
 utils::globalVariables("%dopar%")
@@ -119,8 +119,8 @@ utils::globalVariables("%dopar%")
 #' @param ... Additional arguments to be passed to
 #' \code{\link[glmnet]{cv.glmnet}}.
 #' 
-#' @details Note that obervations with missing values will be removed prior to 
-#' analysis.
+#' @details Note: obervations with missing values will be removed prior to 
+#' analysis (and a warning issued).
 #' 
 #' In some cases, duplicated variable names may appear in the model.
 #' For example, the first variable is a factor named 'V1' and there are also
@@ -173,6 +173,9 @@ utils::globalVariables("%dopar%")
 #' TRUE \tab FALSE	\tab >0 \tab poisson	  \tab rpart \tab Single, integer \cr
 #' TRUE \tab FALSE \tab >0 \tab cox         \tab rpart \tab Object of class 'Surv'
 #' }
+#' 
+#' If an error along the lines of 'factor ... has new levels ...' is encountered, 
+#' consult \code{?rare_level_sampler} for explanation and solutions.
 #' 
 #' @note Parts of the code for deriving rules from the nodes of trees was copied 
 #' with permission from an internal function of the \code{partykit} package, written
@@ -236,13 +239,17 @@ utils::globalVariables("%dopar%")
 #' \code{\link{interact}}, \code{\link{cvpre}} 
 #' @references Fokkema, M. (2020). Fitting prediction rule ensembles with R 
 #' package pre. \emph{Journal of Statistical Software, 92}(12), 1-30.
-#' \url{https://doi.org/10.18637/jss.v092.i12}
+#' \doi{10.18637/jss.v092.i12}
+#' 
+#' Fokkema, M. & Strobl, C. (2020). Fitting prediction rule ensembles to psychological 
+#' research data: An introduction and tutorial. \emph{Psychological Methods 25}(5), 
+#' 636-652. \doi{10.1037/met0000256}, \url{https://arxiv.org/abs/1907.05302}
 #' 
 #' Friedman, J. H. (2001). Greedy function approximation: a gradient boosting 
 #' machine. \emph{The Annals of Applied Statistics, 29}(5), 1189-1232.
 #' 
 #' Friedman, J. H., & Popescu, B. E. (2008). Predictive learning via rule 
-#' ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
+#' ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954, \doi{10.1214/07-AOAS148}.
 #' 
 #' Hothorn, T., & Zeileis, A. (2015). partykit: A modular toolkit for recursive 
 #' partytioning in R. \emph{Journal of Machine Learning Research, 16}, 3905-3909.
@@ -493,13 +500,6 @@ pre <- function(formula, data, family = gaussian,
     data[ , logic_names] <- sapply(data[ , logic_names], factor)
   } 
   
-  ## Coerce ordered categorical variables to numeric:
-  if (ordinal) {
-    if (any(ord_var_inds <- sapply(data, is.ordered))) {
-      data[ , ord_var_inds] <- sapply(data[ , ord_var_inds], as.numeric)
-    }
-  }
-  
   ## get response variable name(s):
   y_names <- names(data)[attr(attr(data, "terms"), "response")]
   if (family == "mgaussian" || length(y_names) == 0) {
@@ -508,13 +508,20 @@ pre <- function(formula, data, family = gaussian,
   }
   
   ## get predictor variable names:
-  if (family == "cox" || is.Surv(data[, y_names])) {
+  if (family == "cox" || is.Surv(data[ , y_names])) {
     x_names <- attr(attr(data, "terms"), "term.labels")
   } else if (use_glmertree) {
     ## TODO: This does, but should not, remove all functions used in formula:
     x_names <- all.vars(formula[[3L]][[3L]])
   } else {
     x_names <- attr(terms(Formula(formula), lhs = 0, data = data), "term.labels")
+  }
+  
+  ## Coerce ordered categorical variables to numeric:
+  if (ordinal) {
+    if (any(ord_var_inds <- sapply(data[ , x_names], is.ordered))) {
+      data[ , ord_var_inds] <- sapply(data[ , ord_var_inds], as.numeric)
+    }
   }
   
   ## expand dot and put ticks around variables within functions, if present:
@@ -533,23 +540,23 @@ pre <- function(formula, data, family = gaussian,
   ## check and set correct family:
   if (is.null(cl$family)) {
     if (length(y_names) == 1L) {
-      if (is.factor(data[,y_names])) { # then family should be bi- or multinomial
-        if (is.ordered(data[,y_names])) {
+      if (is.factor(data[ , y_names])) { # then family should be bi- or multinomial
+        if (is.ordered(data[ , y_names])) {
           warning("An ordered factor was specified as the response variable, which will be treated as an unordered factor response.")
-          data[,y_names] <- factor(data[,y_names], ordered = FALSE)
+          data[ , y_names] <- factor(data[ , y_names], ordered = FALSE)
         } 
-        if (nlevels(data[,y_names]) == 2L) {
+        if (nlevels(data[ , y_names]) == 2L) {
             family <- "binomial"
-        } else if (nlevels(data[,y_names]) > 2L) {
+        } else if (nlevels(data[ , y_names]) > 2L) {
             family <- "multinomial"
           }
-      } else if (is.Surv(data[,y_names])) { # then family should be cox
+      } else if (is.Surv(data[ , y_names])) { # then family should be cox
         family <- "cox"
-      } else if (!is.numeric(data[,y_names])) { # then response is not a factor, survival or numeric
+      } else if (!is.numeric(data[ , y_names])) { # then response is not a factor, survival or numeric
         warning("The response variable specified through argument 'formula' should be of class numeric, factor or Surv.")
       }
     } else if (length(y_names) > 1L) { # multiple responses specified, should be numeric
-      if (all(sapply(data[,y_names], is.numeric))) {
+      if (all(sapply(data[ , y_names], is.numeric))) {
         family <- "mgaussian"
       } else {
         warning("Multiple response variables were specified, but not all were (but should be) numeric.\n")
@@ -562,31 +569,35 @@ pre <- function(formula, data, family = gaussian,
       if (length(y_names) > 1L) {
         warning("Argument 'family' was set to 'gaussian', but multiple response variables were specified in 'formula'.\n")        
       }
-      if (!is.numeric(data[,y_names])) { # then family should be poisson or gaussian
+      if (!is.numeric(data[ , y_names])) { # then family should be poisson or gaussian
         warning("Argument 'family' was set to 'gaussian', but the response variable specified in 'formula' is not of class numeric.\n")
       }
     } else if (family[1L] == "poisson") {
       if (length(y_names) > 1L) {
         warning("Argument 'family' was set to 'poisson', but multiple response variables were specified, which is not supported.\n")
       }
-      if (!isTRUE(all.equal(round(data[,y_names]), data[,y_names]))) {
+      if (!isTRUE(all.equal(round(data[ , y_names]), data[ , y_names]))) {
         warning("Argument 'family' was set to 'poisson', but the response variable specified in 'formula' is non-integer.\n")
       }
     } else if (family[1L] == "binomial") {
       if (length(y_names) > 1L) {
         warning("Argument 'family' was set to 'binomial', but multiple response variables were specified, which is not supported.\n")
-      } else if (!is.factor(data[,y_names])) {
+      } else if (!is.factor(data[ , y_names])) {
         warning("Argument 'family' was set to 'binomial', but the response variable specified is not a factor.\n")
-      } else if (nlevels(data[,y_names]) != 2L) {
-        warning("Argument 'family' was set to 'binomial', but the response variable has ", nlevels(data[,y_names]), " levels.\n")        
+      } else if (is.ordered(data[ , y_names])) {
+        warning("Argument 'family' was set to 'binomial', but the response variable specified is an ordered factor. It will be treated as an unordered factor.")
+      } else if (nlevels(data[ , y_names]) != 2L) {
+        warning("Argument 'family' was set to 'binomial', but the response variable has ", nlevels(data[ , y_names]), " levels.\n")        
       }
     } else if (family[1L] == "multinomial") {
       if (length(y_names) > 1L) {
         warning("Argument 'family' was set to 'multinomial', but multiple response variables were specified, which is not supported.\n")
-      } else if (!is.factor(data[,y_names])) {
+      } else if (!is.factor(data[ , y_names])) {
         warning("Argument 'family' was set to 'multinomial', but the response variable specified is not a factor.\n")
-      } else if (nlevels(data[,y_names]) < 3L) {
-        warning("Argument 'family' was set to 'multinomial', but the response variable has ", nlevels(data[,y_names]), " levels.\n")
+      } else if (is.ordered(data[ , y_names])) {
+        warning("Argument 'family' was set to 'multinomial', but the response variable specified is an ordered factor. It will be treated as an unordered factor.")
+      } else if (nlevels(data[ , y_names]) < 3L) {
+        warning("Argument 'family' was set to 'multinomial', but the response variable has ", nlevels(data[ , y_names]), " levels.\n")
       }
     } else if (family[1L] == "cox") {
       if (length(y_names) > 1L) {
@@ -597,7 +608,7 @@ pre <- function(formula, data, family = gaussian,
     } else if (family == "mgaussian") {
       if (length(y_names) == 1L) {
         warning("Argument 'family' was set to 'mgaussian', but only a single response variable was specified.\n")
-      } else if (!all(sapply(data[,y_names], is.numeric))) {
+      } else if (!all(sapply(data[ , y_names], is.numeric))) {
         warning("Argument 'family' was set to 'mgaussian', but not all response variables specified are numeric.\n")
       }
     }
@@ -633,8 +644,8 @@ pre <- function(formula, data, family = gaussian,
 
   ## Prevent response from being interpreted as count by ctree or rpart:
   if (learnrate == 0 && family == "gaussian" && (!(tree.unbiased && !use.grad))) { # if glmtree is not employed
-    if (isTRUE(all.equal(round(data[, y_names]), data[, y_names]))) { # if response passes integer test
-      data[, y_names] <- data[, y_names] + 0.01 # add small constant to response to prevent response being interpreted as count by ctree or rpart
+    if (isTRUE(all.equal(round(data[ ,  y_names]), data[ ,  y_names]))) { # if response passes integer test
+      data[ ,  y_names] <- data[ ,  y_names] + 0.01 # add small constant to response to prevent response being interpreted as count by ctree or rpart
       small_constant_added <- 0.01
     } else {
       small_constant_added <- FALSE
@@ -695,7 +706,8 @@ pre <- function(formula, data, family = gaussian,
                                 removeduplicates = removeduplicates, 
                                 removecomplements = removecomplements)
     } else {
-      rule_object <- pre_rules(formula = formula, 
+
+      rule_object <- try(pre_rules(formula = formula, 
                                data = data,
                                weights = weights,
                                y_names = y_names,
@@ -714,7 +726,13 @@ pre <- function(formula, data, family = gaussian,
                                removecomplements = removecomplements,
                                tree.unbiased = tree.unbiased,
                                return.dupl.compl = TRUE, 
-                               sparse = sparse)
+                               sparse = sparse))
+      if (inherits(rule_object, "try-error")) {
+        if (grepl("has new levels", rule_object)) {
+          stop(rule_object[1], paste("\n Hint: There may be a predictor variable which is a factor with rare levels. Consult ?rare_level_sampler"))
+        }
+        stop(rule_object[1])
+      }
     }
     rules <- rule_object$rules
     rulevars <- rule_object$rulevars
@@ -730,7 +748,7 @@ pre <- function(formula, data, family = gaussian,
   }
   
   if (is.numeric(small_constant_added)) {
-    data[, y_names] <- data[, y_names] - small_constant_added
+    data[ , y_names] <- data[ , y_names] - small_constant_added
   }
   
   ## Prepare right formula if glmertree was used for tree induction
@@ -851,8 +869,8 @@ get_modmat <- function(
   data_org <- data # needed to evaluate rules later
   
   # convert ordered categorical predictor variables to linear terms:
-  data[,sapply(data, is.ordered)] <- 
-    as.numeric(data[,sapply(data, is.ordered)])
+  data[ , sapply(data, is.ordered)] <- 
+    as.numeric(data[ , sapply(data, is.ordered)])
   
   ## Add confirmatory terms:
   if (!is.null(confirmatory)) {
@@ -872,7 +890,7 @@ get_modmat <- function(
   #####
   # Perform winsorizing and normalizing
   ## TODO: Allow for not supplying all variables, but only variables with non-zero importances:
-  if (type != "rules" && any(sapply(data[,x_names], is.numeric))) {
+  if (type != "rules" && any(sapply(data[ , x_names], is.numeric))) {
     #####
     # if type is not rules, linear terms should be prepared:
     
@@ -890,13 +908,13 @@ get_modmat <- function(
         j <- j + 1L
         if (is.numeric(data[[i]])) {
           if (miss_wins_points) {
-            lim <- quantile(data[, i], probs = c(winsfrac, 1 - winsfrac))
+            lim <- quantile(data[ , i], probs = c(winsfrac, 1 - winsfrac))
             wins_points$value[j] <- paste(lim[1L], "<=", i, "<=", lim[2L])
             lb <- lim[1L]
             ub <- lim[2L]
             if (ub - lb < tol) {
               ## If lower and upper bound are equal, do not winsorize and issue warning:
-              warning("Variable ", x_names[j], " will be winsozired employing winsfrac = 0, to prevent reducing the variance of its linear term to 0.", immediate. = TRUE)
+              warning("Variable ", x_names[j], " will be winsorized employing winsfrac = 0, to prevent reducing the variance of its linear term to 0.", immediate. = TRUE)
               wins_points$lb[j] <- min(data[ , i])
               wins_points$ub[j] <- max(data[ , i])
             } else {
@@ -920,14 +938,14 @@ get_modmat <- function(
       if (length(needs_scaling) > 0) {
         if (is.null(x_scales)) {
           x_scales <- apply(
-            data[, needs_scaling, drop = FALSE], 2L, sd, na.rm = TRUE) / 0.4
+            data[ , needs_scaling, drop = FALSE], 2L, sd, na.rm = TRUE) / 0.4
         }
         ## check if variables have zero variance (if so, do not scale):
         tol <- sqrt(.Machine$double.eps)
         almost_zero_var_inds <- which(x_scales < tol)
         if (length(almost_zero_var_inds) > 0) {
           # print warning and set all those x_scales to 1
-          warning("Variable(s) ", needs_scaling[almost_zero_var_inds], " have sd < ", tol, " and will not be normalized.")  
+          warning("A total of ", length(almost_zero_var_inds), " variable(s) (e.g.,", paste0(head(needs_scaling[almost_zero_var_inds]), collapse = ", "), ") have sd < ", tol, " and will not be normalized.")  
           # omit from needs_scaling:
           x_scales[almost_zero_var_inds] <- 1
         }
@@ -1200,10 +1218,10 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
           y[,i] <- ifelse(y[,i] == 1, log(p_0[,i]), log(1 - p_0[,i]))
         }
         ## omit original response and include dummy-coded response in data:
-        data_with_y_learn <- cbind(data[,-which(names(data)== y_names)], y)
+        data_with_y_learn <- cbind(data[ , -which(names(data)== y_names)], y)
         multinomial_y_names <- names(y)
       } else if (family == "mgaussian") {
-        y <- data[,y_names]
+        y <- data[ , y_names]
         eta_0 <- apply(y, 2, weighted.mean, weights = rep(1, nrow(y)))
         eta <- t(replicate(n = nrow(y), expr = eta_0))
         data_with_y_learn[,y_names] <- y - eta
@@ -1211,12 +1229,12 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
         ## Adjust formula used by ctree and rpart:
         formula <- as.formula(paste0("pseudo_y ~ ", 
                                      paste0(x_names, collapse = " + ")))
-        y <- data[,y_names]
+        y <- data[ , y_names]
         eta_0 <- 0
         eta <- rep(0, times = nrow(data))
         ngradient_CoxPH <- mboost::CoxPH()@ngradient
         ## omit original response and include pseudo-y:
-        data_with_y_learn <- cbind(data[,-which(names(data)== y_names)], y)
+        data_with_y_learn <- cbind(data[ , -which(names(data)== y_names)], y)
         data_with_y_learn$pseudo_y <- ngradient_CoxPH(y = y, f = eta, w = weights)
       }
 
@@ -1909,7 +1927,7 @@ cvpre <- function(object, k = 10, penalty.par.val = "lambda.1se", pclass = .5,
   }
   seeds <- sample(k*99, size = k)
   y_ncol <- ifelse(object$family == "multinomial", 
-                   nlevels(object$data[,object$y_names]), 
+                   nlevels(object$data[ , object$y_names]), 
                    length(object$y_names)) 
   cvpreds <- replicate(n = y_ncol, rep(NA, times = nrow(object$data)))
   cl <- object$call
@@ -2038,7 +2056,7 @@ coef.pre <- function(object, penalty.par.val = "lambda.1se", ...)
 {
   
   ## TODO: Add argument on whether learners with zero coefficients should
-  ## be included ot not
+  ## be included or not
   
   ## check if proper object argument is specified:
   if(class(object) != "pre") {
@@ -2135,7 +2153,7 @@ coef.pre <- function(object, penalty.par.val = "lambda.1se", ...)
 #' ensemble, for training or new (test) observations
 #'
 #' @param object object of class \code{\link{pre}}.
-#' @param newdata optional dataframe of new (test) observations, including all
+#' @param newdata optional \code{data.frame} of new (test) observations, including all
 #' predictor variables used for deriving the prediction rule ensemble.
 #' @inheritParams print.pre
 #' @param type character string. The type of prediction required; the default
@@ -2187,6 +2205,8 @@ predict.pre <- function(object, newdata = NULL, type = "link",
   
   } else {
 
+    if (inherits(newdata, c("tbl_df", "tbl"))) newdata <- as.data.frame(newdata)
+    
     ## Have to prepare newdata for get_modmat():
     
     ## check if proper newdata argument is specified, if specified:    
@@ -2223,8 +2243,9 @@ predict.pre <- function(object, newdata = NULL, type = "link",
     } else {
       (object$call)$ordinal
     }) {
-      if (any(ord_var_inds <- sapply(newdata, is.ordered))) {
-        newdata[ , ord_var_inds] <- sapply(newdata[ , ord_var_inds], as.numeric)
+      if (any(ordered_names <- sapply(newdata, is.ordered))) {
+        ordered_names <- names(newdata)[ordered_names]
+        newdata[ , ordered_names] <- sapply(newdata[ , ordered_names], as.numeric)
       }
     }
     
@@ -2256,7 +2277,7 @@ predict.pre <- function(object, newdata = NULL, type = "link",
       x_names = object$x_names, 
       normalize = object$normalize,
       y_names = NULL,
-      confirmatory = object$call$confirmatory)
+      confirmatory = eval(object$call$confirmatory))
     
     newdata <- newdata$x
   }
@@ -2318,11 +2339,7 @@ predict.pre <- function(object, newdata = NULL, type = "link",
 #' 
 #' See also section 8.1 of Friedman & Popescu (2008).
 #' 
-#' @references Fokkema, M. (2020). Fitting prediction rule ensembles with R 
-#' package pre. \emph{Journal of Statistical Software, 92}(12), 1-30.
-#' \url{https://doi.org/10.18637/jss.v092.i12}
-#' 
-#' Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
+#' @references Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
 #' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
 #' 
 #' Milborrow, S. (2019). plotmo: Plot a model's residuals, response, and partial 
@@ -2372,7 +2389,7 @@ singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
   if (!is.null(nvals)) {
     if (length(nvals) != 1L || nvals != as.integer(nvals)) {
       stop("Argument 'nvals' should be an integer vector of length 1.")
-    } else if (is.factor(object$data[,varname]) && !is.null(nvals)) {
+    } else if (is.factor(object$data[ , varname]) && !is.null(nvals)) {
       warning("Plot is requested for variable of class factor. Value specified for
               nvals will be ignored.", immediate. = TRUE)
       nvals <- NULL
@@ -2386,10 +2403,10 @@ singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
   
   # Generate expanded dataset:
   if (is.null(nvals)) {
-    newx <- unique(object$data[,varname])
+    newx <- unique(object$data[ , varname])
   } else {
     newx <- seq(
-      min(object$data[,varname]), max(object$data[,varname]), length = nvals)
+      min(object$data[ , varname]), max(object$data[ , varname]), length = nvals)
   }
   exp_dataset <- object$data[rep(row.names(object$data), times = length(newx)),]
   exp_dataset[,varname] <- rep(newx, each = nrow(object$data))
@@ -2463,11 +2480,7 @@ singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
 #' airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),])
 #' pairplot(airq.ens, c("Temp", "Wind"))}
 #' @export
-#' @references Fokkema, M. (2020). Fitting prediction rule ensembles with R 
-#' package pre. \emph{Journal of Statistical Software, 92}(12), 1-30.
-#' \url{https://doi.org/10.18637/jss.v092.i12}
-#' 
-#' Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
+#' @references Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
 #' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
 #' 
 #' Milborrow, S. (2019). plotmo: Plot a model's residuals, response, and partial 
@@ -2501,7 +2514,7 @@ pairplot <- function(object, varnames, type = "both",
     } else {
       stop("Argument 'varnames' should specify names of variables used to generate the ensemble.")
     }
-  } else if (any(sapply(object$data[,varnames], is.factor))) {
+  } else if (any(sapply(object$data[ , varnames], is.factor))) {
     stop("3D partial dependence plots are currently not supported for factors.")
   }
   
@@ -2537,12 +2550,12 @@ pairplot <- function(object, varnames, type = "both",
 
   # generate expanded dataset:
   if (is.null(nvals)){
-    newx1 <- unique(object$data[,varnames[1]])
-    newx2 <- unique(object$data[,varnames[2]])
+    newx1 <- unique(object$data[ , varnames[1]])
+    newx2 <- unique(object$data[ , varnames[2]])
   } else {
-    newx1 <- seq(min(object$data[,varnames[1]]), max(object$data[,varnames[1]]),
+    newx1 <- seq(min(object$data[ , varnames[1]]), max(object$data[ , varnames[1]]),
                  length = nvals[1])
-    newx2 <- seq(min(object$data[,varnames[2]]), max(object$data[,varnames[2]]),
+    newx2 <- seq(min(object$data[ , varnames[2]]), max(object$data[ , varnames[2]]),
                  length = nvals[2])
   }
   nobs1 <- length(newx1)
@@ -2646,10 +2659,15 @@ pairplot <- function(object, varnames, type = "both",
 #' importance(airq.ens, global = FALSE, quantprobs = c(0, .25))}
 #' @references Fokkema, M. (2020). Fitting prediction rule ensembles with R 
 #' package pre. \emph{Journal of Statistical Software, 92}(12), 1-30.
-#' \url{https://doi.org/10.18637/jss.v092.i12}
+#' \doi{10.18637/jss.v092.i12}
+#' 
+#' Fokkema, M. & Strobl, C. (2020). Fitting prediction rule ensembles to psychological 
+#' research data: An introduction and tutorial. \emph{Psychological Methods 25}(5), 
+#' 636-652. \doi{10.1037/met0000256}, \url{https://arxiv.org/abs/1907.05302}
 #' 
 #' Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
-#' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
+#' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954 
+#' \doi{10.1214/07-AOAS148}.
 #' @seealso \code{\link{pre}}
 #' @export
 importance <- function(object, standardize = FALSE, global = TRUE,
@@ -2706,9 +2724,9 @@ importance <- function(object, standardize = FALSE, global = TRUE,
       }
       if (standardize) {
         if (object$family == "mgaussian") {
-          sd_y <- sapply(object$data[,object$y_names], sd)
+          sd_y <- sapply(object$data[ , object$y_names], sd)
         } else if (object$family %in% c("gaussian", "poisson")) { 
-          sd_y <- sd(as.numeric(object$data[,object$y_names]))
+          sd_y <- sd(as.numeric(object$data[ , object$y_names]))
         }
       }
     } else {
@@ -2975,10 +2993,11 @@ importance <- function(object, standardize = FALSE, global = TRUE,
 #' 
 #' @references Fokkema, M. (2020). Fitting prediction rule ensembles with R 
 #' package pre. \emph{Journal of Statistical Software, 92}(12), 1-30.
-#' \url{https://doi.org/10.18637/jss.v092.i12}
+#' \doi{10.18637/jss.v092.i12}
 #' 
 #' Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
-#' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
+#' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954,
+#' \doi{10.1214/07-AOAS148}.
 #' @seealso \code{\link{pre}}, \code{\link{interact}} 
 #' @export
 bsnullinteract <- function(object, nsamp = 10, parallel = FALSE,
@@ -3028,7 +3047,7 @@ bsnullinteract <- function(object, nsamp = 10, parallel = FALSE,
       # step 6: Build a model using (x,ytilde), using the same procedure as was
       # originally applied to (x,y):
       bsintmodcall$data <- object$data
-      bsintmodcall$data[,all.vars(object$call$formula[[2]])] <- ytilde
+      bsintmodcall$data[ , all.vars(object$call$formula[[2]])] <- ytilde
       eval(bsintmodcall)
     }
   } else {
@@ -3077,7 +3096,7 @@ Hsquaredj <- function(object, varname, k = 10, penalty.par.val = NULL, verbose =
   # and the expected value of F_/j(x_/j), over all observed values x_j:
   exp_dataset <- object$data[rep(row.names(object$data),
                                       times = nrow(object$data)),]
-  exp_dataset[,varname] <- rep(object$data[,varname], each = nrow(object$data))
+  exp_dataset[,varname] <- rep(object$data[ , varname], each = nrow(object$data))
   # using predict.pre for a hughe dataset may lead to errors, so split
   # computations up in k parts:
   exp_dataset$ids <- sample(1:k, nrow(exp_dataset), replace = TRUE)
@@ -3187,10 +3206,11 @@ Hsquaredj <- function(object, varname, k = 10, penalty.par.val = NULL, verbose =
 #' 
 #' @references Fokkema, M. (2020). Fitting prediction rule ensembles with R 
 #' package pre. \emph{Journal of Statistical Software, 92}(12), 1-30.
-#' \url{https://doi.org/10.18637/jss.v092.i12}
+#' \doi{10.18637/jss.v092.i12}
 #' 
 #' Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
-#' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
+#' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954,
+#' \doi{10.1214/07-AOAS148}.
 #' @seealso \code{\link{pre}}, \code{\link{bsnullinteract}} 
 #' @export
 interact <- function(object, varnames = NULL, nullmods = NULL, 
@@ -3484,7 +3504,7 @@ plot.pre <- function(x, penalty.par.val = "lambda.1se", linear.terms = TRUE,
           faclevels <- gsub(pattern = "(", replacement = "", x = faclevels, fixed = TRUE)
           faclevels <- gsub(pattern = ")", replacement = "", x = faclevels, fixed = TRUE)
           faclevels <- unlist(strsplit(faclevels, ", ",))
-          levels(treeplotdata[,j]) <- c(
+          levels(treeplotdata[ , j]) <- c(
             levels(x$data[ , cond[[j]][1L]])[levels(x$data[ , cond[[j]][1L]]) %in% faclevels],
             levels(x$data[ , cond[[j]][1L]])[!(levels(x$data[ , cond[[j]][1L]]) %in% faclevels)])
           cond[[j]][3L] <- length(faclevels)
@@ -3587,7 +3607,7 @@ plot.pre <- function(x, penalty.par.val = "lambda.1se", linear.terms = TRUE,
         if (x$family == "mgaussian") {
           ht <- length(x$y_names)
         } else {
-          ht <- nlevels(x$data[,x$y_names])
+          ht <- nlevels(x$data [ ,x$y_names])
         }
         plot(fftree, newpage = FALSE, main = nonzeroterms$rule[i],
              inner_panel = node_inner(fftree, id = FALSE),
@@ -3824,6 +3844,10 @@ corplot <- function(object, penalty.par.val = "lambda.1se", colors = NULL,
 #' for an observation in \code{newdata} equals (the value of the linear
 #' temr, minus the mean value of the linear term in the training data)
 #' times the estimated coefficient for the linear term.
+#' @references Fokkema, M. & Strobl, C. (2020). Fitting prediction rule 
+#' ensembles to psychological research data: An introduction and tutorial. 
+#' \emph{Psychological Methods 25}(5), 636-652. \doi{10.1037/met0000256},
+#' \url{https://arxiv.org/abs/1907.05302}
 #' @examples \donttest{airq <- airquality[complete.cases(airquality), ]
 #' set.seed(1)
 #' train <- sample(1:nrow(airq), size = 100)
@@ -3953,8 +3977,9 @@ explain <- function(object, newdata, penalty.par.val = "lambda.1se",
   } else {
     (object$call)$ordinal
   }) {
-    if (any(ord_var_inds <- sapply(modmat, is.ordered))) {
-      modmat[ , ord_var_inds] <- sapply(modmat[ , ord_var_inds], as.numeric)
+    if (any(ordered_names <- sapply(modmat, is.ordered))) {
+      ordered_names <- names(modmat)[ordered_names]
+      modmat[ , ordered_names] <- sapply(modmat[ , ordered_names], as.numeric)
     }
   }
   
@@ -4106,4 +4131,119 @@ explain <- function(object, newdata, penalty.par.val = "lambda.1se",
   if (intercept) newdata <- cbind(`(Intercept)` = 1L, newdata)
   
   return(list(predictors = newdata[ , req_vars], contribution = t(explanation), predicted.value = preds))
+}
+
+
+
+#' Dealing with rare factor levels in fitting prediction rule ensembles.
+#' 
+#' Provides a sampling function to be supplied to the \code{sampfrac}
+#' argument of function \code{pre}, making sure that each level of specified factor(s)
+#' are present in each sample.
+#' 
+#' @details Categorical predictor variables (factors) with rare levels may be problematic 
+#' in boosting algorithms employing sampling (which is employed by default in
+#' function \code{pre}).
+#' 
+#' If a sample in a given boosting iteration does not have any observations with a given
+#' (rare) level of a factor, while this level is present in the full training dataset, and 
+#' the factor is selected for splitting in the tree, then no prediction for that level of the factor
+#' can be generated, resulting in an error. Note that boosting methods other than \code{pre} that also 
+#' employ sampling (e.g., \code{gbm} or \code{xgboost}) may not generate an error in such cases, 
+#' but also do not document how intermediate predictions are generated in such a case. It is likely that
+#' these methods use one-hot-encoding of factors, which from a perspective of model interpretation 
+#' introduces new problems, especially when the aim is to obtain a sparse set of rules as in `pre`. 
+#'                               
+#' With function \code{pre()}, the rare-factor-level issue, if encountered, can be dealt with by the user 
+#' in one of the following ways (in random order):
+#' 
+#' \itemize{
+#' \item Use a sampling function that guarantees inclusion of rare factor levels in each sample. E.g., 
+#' use \code{rare_level_sampler}, yielding a sampling function which creates training samples 
+#' guaranteed to include each level of specified factor(s). Advantage: No loss of information, easy to implement, 
+#' guaranteed to solve the issue. Disadvantage: May result in oversampling 
+#' of observations with rare factor levels, potentially biasing results. The bias is likely small though, and 
+#' will be larger for smaller sample sizes and sampling fractions, and for larger numbers of rare
+#' levels. The latter will also increase computational demands. 
+#' \item Specify \code{learnrate = 0}. This results in a (su)bagging instead of boosting approach.
+#' Advantage: Eliminates the rare-factor-level issue completely, because intermediate predictions
+#' need not be computed. Disadvantage: Boosting with low learning rate often improves predictive accuracy.
+#' \item Data pre-processing: Before running function \code{pre()}, combine rare factor levels 
+#' with other levels of the factors. Advantage: Limited loss of information. Disadvantage: Likely, but 
+#' not guaranteed to solve the issue. 
+#' \item Data pre-processing: Apply one-hot encoding to the predictor matrix before applying function `pre()`. This can easily be 
+#' done through applying function \code{\link[stats]{model.matrix}}. Advantage: Guaranteed to solve the error,
+#' easy to implement. Disadvantage: One-hot-encoding increases the number of predictor variables 
+#' which may reduce interpretability and, but probably to a lesser extent, accuracy.                                     
+#' \item Data pre-processing: Remove observations with rare factor levels from the dataset
+#' before running function \code{pre()}. Advantage: Guaranteed to solve the error. Disadvantage: 
+#' Removing outliers results in a loss of information, and may bias the results.
+#' \item Increase the value of \code{sampfrac} argument of function \code{pre()}. Advantage: Easy to
+#' implement. Disadvantage: Larger samples are more likely but not guaranteed to contain all possible 
+#' factor levels, thus not guaranteed to solve the issue.
+#' }
+#' @return A sampling function, which generates sub- or bootstrap samples as usual in function \code{pre}, but 
+#' checks if all levels of the specified factor(s) are present and adds observation with those levels if not. 
+#' If \code{warning = TRUE}, a warning is issued).
+#' 
+#' @param factors Character vector with name(s) of factors with rare levels. 
+#' @inheritParams pre
+#' @param warning logical. Whether a warning should be printed if observations with
+#' rare factor levels are added to the training sample of the current iteration.
+#' 
+#' @examples
+#' ## Create dataset with two factors containing rare levels
+#' dat <- iris[iris$Species != "versicolor", ]
+#' dat <- rbind(dat, iris[iris$Species == "versicolor", ][1:5, ])
+#' dat$factor2 <- factor(rep(1:21, times = 5))
+#' 
+#' ## Set up sampling function
+#' samp_func <- rare_level_sampler(c("Species", "factor2"), data = dat, 
+#'                                   sampfrac = .51, warning = TRUE)
+#' 
+#' ## Illustrate behavior of sampling function                                                                   
+#' N <- nrow(dat)
+#' wts <- rep(1, times = nrow(dat))
+#' set.seed(3)
+#' dat[samp_func(n = N, weights = wts), ] # single sample
+#' for (i in 1:500) dat[samp_func(n = N, weights = wts), ]
+#' warnings() # to illustrates warnings that may occur when fitting a full PRE
+#' 
+#' ## Illustrate use of function generator with function pre:
+#' ## (Note: low ntrees value merely to reduce computation time for the example)
+#' set.seed(42)
+#' # iris.ens <- pre(Petal.Width ~ . , data = dat, ntrees = 20) # would yield error
+#' iris.ens <- pre(Petal.Width ~ . , data = dat, ntrees = 20, 
+#'   sampfrac = samp_func) # should work
+#' @seealso \code{\link{pre}}
+#' @export
+rare_level_sampler <- function(factors, data, sampfrac = .5, warning = FALSE) {
+  if (sampfrac < 1) {
+    replace <- FALSE
+  }  else if (sampfrac == 1) {
+    replace <- TRUE
+  }
+  ids <- list()
+  for (i in factors) {
+    ids[[i]] <- lapply(unique(data[ , i]), function(x) which(data[ , i] == x))
+    names(ids[[i]]) <- unique(data[ , i])
+  }
+  ret <- function(n, weights, sampfrac. = sampfrac, replace. = replace, ids. = ids,
+                  warning. = warning) {
+    ## Generate initial random sample:
+    sample_ids <- sample(1:n, size = ceiling(sampfrac.*n), replace = replace., 
+                         prob = weights)
+    for (i in names(ids.)) {
+      ## For every factor, for all levels, check if present in sample
+      for (j in names(ids.[[i]])) {
+        if (!any(ids[[i]][[j]] %in% sample_ids)) {
+          ## If not present, add an observation with that level to the sample
+          sample_ids <- c(sample_ids, sample(ids[[i]][[j]], size = 1))
+          if (warning.) warning("Added observation with level ", j, " for variable ", i," to current sample.")
+        }
+      }
+    }
+    return(sample_ids)
+  }
+  ret
 }
