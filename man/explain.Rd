@@ -152,6 +152,6 @@ ensembles to psychological research data: An introduction and tutorial.
 }
 \seealso{
 \code{\link{pre}}, \code{\link{plot.pre}},
-\code{\link{coef.pre}}, \code{\link{importance}}, \code{\link{cvpre}},
+\code{\link{coef.pre}}, \code{\link{importance.pre}}, \code{\link{cvpre}},
 \code{\link{interact}}, \code{\link{print.pre}}
 }

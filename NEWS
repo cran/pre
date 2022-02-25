@@ -1,4 +1,29 @@
-Changes in Version 1.0.1 (2021-04-07)
+Changes in Version 1.0.2 (2022-02-24)
+
+  - Added vignette explaining how to tune parameters of function pre() using
+      package caret.
+
+  - Added vignette on how to deal with missing values.
+
+  - Added support for supplying a tibble instead of a data.frame to function pre().
+
+  - Function importance is now an S3method.
+
+  - Argument cex.axis of function (method) importance is now passed correctly.
+
+  - Argument weights of functions pre() and gpe() now correctly passed to rule 
+      induction functions.
+
+  - Added progress bar indicating tree fitting progress.
+
+  - Argument singleconditions implemented in function pre() (experimental).
+
+
+
+
+
+
+Changes in Version 1.0.1 (2021-07-04)
 
   - Added function rare_level_sampler to deal with errors related to
       new factor levels.

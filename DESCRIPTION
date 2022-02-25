@@ -1,6 +1,6 @@
 Package: pre
 Title: Prediction Rule Ensembles
-Version: 1.0.1
+Version: 1.0.2
 Authors@R: c(person("Marjolein", "Fokkema", role = c("aut", "cre"), email = 
   "m.fokkema@fsw.leidenuniv.nl"), person(given = "Benjamin", 
   family = "Christoffersen", role = "aut", email = "boennecd@gmail.com"))
@@ -21,12 +21,14 @@ Depends: R (>= 3.5.0)
 Imports: earth, Formula, glmnet, graphics, methods, partykit (>=
         1.2-0), rpart, stringr, survival, Matrix, MatrixModels
 Suggests: akima, datasets, doParallel, foreach, glmertree, grid,
-        mlbench, testthat, mboost
+        mlbench, testthat, mboost, ggplot2, caret, pROC, knitr,
+        rmarkdown, mice
 License: GPL-2 | GPL-3
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.1.1
+VignetteBuilder: knitr
 NeedsCompilation: no
-Packaged: 2021-07-05 01:25:34 UTC; fokkemam
+Packaged: 2022-02-25 02:28:53 UTC; fokkemam
 Repository: CRAN
-Date/Publication: 2021-07-05 15:00:02 UTC
+Date/Publication: 2022-02-25 08:00:02 UTC

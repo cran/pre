@@ -1,8 +1,6 @@
-**pre**: an R package for deriving prediction rule ensembles
-============================================================
+# **`pre`**: an R package for deriving prediction rule ensembles
 
-Contents
---------
+## Contents
 
 -   [Introduction](#introduction)
 -   [Example: A rule ensemble for predicting ozone
@@ -16,16 +14,16 @@ Contents
         interactions](#assessing-presence-of-interactions)
     -   [Correlations between selected
         terms](#correlations-between-selected-terms)
-    -   [Tuning parameters](#tuning-parameters)
+-   [Tuning parameters of function pre](#tuning-parameters)
+-   [Dealing with missing data](#missing-data)
 -   [Generalized Prediction Ensembles: Combining MARS, rules and linear
     terms](#generalized-prediction-ensembles-combining-mars-rules-and-linear-terms)
 -   [Credits](#credits)
 -   [References](#references)
 
-Introduction
-------------
+## Introduction
 
-**pre** is an **R** package for deriving prediction rule ensembles for
+**`pre`** is an **R** package for deriving prediction rule ensembles for
 binary, multinomial, (multivariate) continuous, count and survival
 responses. Input variables may be numeric, ordinal and categorical. An
 extensive description of the implementation and functionality is
@@ -33,8 +31,8 @@ provided in Fokkema (2020). The package largely implements the algorithm
 for deriving prediction rule ensembles as described in Friedman &
 Popescu (2008), with several adjustments:
 
-1.  The package is completely **R** based, allowing users better access
-    to the results and more control over the parameters used for
+1.  The package is completely **`R`** based, allowing users better
+    access to the results and more control over the parameters used for
     generating the prediction rule ensemble.
 2.  The unbiased tree induction algorithms of Hothorn, Hornik, &
     Zeileis (2006) is used for deriving prediction rules, by default.
@@ -49,19 +47,18 @@ Popescu (2008), with several adjustments:
     (MARS) approach of Friedman (1991), using function `gpe()`.
 6.  Tools for explaining individual predictions are provided.
 
-Note that **pre** is under development, and much work still needs to be
-done. Below, an introduction the the package is provided. Fokkema (2020)
-provides an extensive description of the fitting procedures implemented
-in function `pre()` and example analyses with more extensive
+Note that **`pre`** is under development, and much work still needs to
+be done. Below, an introduction the the package is provided. Fokkema
+(2020) provides an extensive description of the fitting procedures
+implemented in function `pre()` and example analyses with more extensive
 explanations. An extensive introduction aimed at researchers in social
 sciences is provided in Fokkema & Strobl (2020).
 
-Example: A rule ensemble for predicting ozone levels
-----------------------------------------------------
+## Example: A rule ensemble for predicting ozone levels
 
-To get a first impression of how function `pre()` works, we will fit a
-prediction rule ensemble to predict Ozone levels using the `airquality`
-dataset. We fit a prediction rule ensemble using function `pre()`:
+To get a first impression of how function `pre()` works, we will predict
+Ozone levels using the `airquality` dataset. We fit a prediction rule
+ensemble using function `pre()`:
 
 ``` r
 library("pre")
@@ -83,23 +80,23 @@ airq.ens
 #> Final ensemble with cv error within 1se of minimum: 
 #>   lambda =  3.543968
 #>   number of terms = 12
-#>   mean cv error (se) = 352.3834 (99.13981)
+#>   mean cv error (se) = 352.395 (99.13754)
 #> 
 #>   cv error type : Mean-Squared Error
 #> 
 #>          rule   coefficient                          description
-#>   (Intercept)   68.48270406                                    1
-#>       rule191  -10.97368179              Wind > 5.7 & Temp <= 87
-#>       rule173  -10.90385520              Wind > 5.7 & Temp <= 82
+#>   (Intercept)   68.48270407                                    1
+#>       rule191  -10.97368180              Wind > 5.7 & Temp <= 87
+#>       rule173  -10.90385519              Wind > 5.7 & Temp <= 82
 #>        rule42   -8.79715538              Wind > 6.3 & Temp <= 84
-#>       rule204    7.16114780         Wind <= 10.3 & Solar.R > 148
-#>        rule10   -4.68646144              Temp <= 84 & Temp <= 77
-#>       rule192   -3.34460037  Wind > 5.7 & Temp <= 87 & Day <= 23
+#>       rule204    7.16114781         Wind <= 10.3 & Solar.R > 148
+#>        rule10   -4.68646145              Temp <= 84 & Temp <= 77
+#>       rule192   -3.34460038  Wind > 5.7 & Temp <= 87 & Day <= 23
 #>        rule51   -2.27864287              Wind > 5.7 & Temp <= 84
 #>        rule93    2.18465676              Temp > 77 & Wind <= 8.6
-#>        rule74   -1.36479546              Wind > 6.9 & Temp <= 84
+#>        rule74   -1.36479545              Wind > 6.9 & Temp <= 84
 #>        rule28   -1.15326093              Temp <= 84 & Wind > 7.4
-#>        rule25   -0.70818399              Wind > 6.3 & Temp <= 82
+#>        rule25   -0.70818400              Wind > 6.3 & Temp <= 82
 #>       rule166   -0.04751152              Wind > 6.9 & Temp <= 82
 ```
 
@@ -171,12 +168,12 @@ which can be overridden through specification of the `k` argument):
 set.seed(43)
 airq.cv <- cvpre(airq.ens)
 #> $MSE
-#>      MSE       se 
-#> 369.2010  88.7574 
+#>       MSE        se 
+#> 369.92747  88.65343 
 #> 
 #> $MAE
-#>      MAE       se 
-#> 13.64524  1.28985
+#>       MAE        se 
+#> 13.666860  1.290329
 ```
 
 The results provide the mean squared error (MSE) and mean absolute error
@@ -186,11 +183,17 @@ can be used to compute alternative estimates of predictive accuracy, are
 saved in `airq.cv$cvpreds`. The folds to which observations were
 assigned are saved in `airq.cv$fold_indicators`.
 
-Tools for interpretation
-------------------------
+For tuning the parameters of function `pre()` so as to obtain optimal
+predictive accuracy, users are advised to use **`R`** package
+**`caret`**. A tutorial is provided as a vignette, accessible by typing
+`vignette("Tuning", package = "pre")` in **`R`** or by going to
+<https://cran.r-project.org/package=pre/> in a browser and clicking on
+the corresponding link to the vignette.
 
-Package **pre** provides several additional tools for interpretation of
-the final ensemble. These may be especially helpful for complex
+## Tools for interpretation
+
+Package **`pre`** provides several additional tools for interpretation
+of the final ensemble. These may be especially helpful for complex
 ensembles containing many rules and linear terms.
 
 ### Importance measures
@@ -252,9 +255,9 @@ pairplot(airq.ens, varnames = c("Temp", "Wind"))
 
 Note that creating partial dependence plots is computationally intensive
 and computation time will increase fast with increasing numbers of
-observations and numbers of variables. `**R**` package `**plotmo**`
-(Milborrow (2018)) provides more efficient functions for plotting
-partial dependence, which also support `pre` models.
+observations and numbers of variables. Milborrow’s (2018) **`plotmo`**
+package provides more efficient functions for plotting partial
+dependence, which also support `pre` models.
 
 If the final ensemble does not contain many terms, inspecting individual
 rules and linear terms through the `print` method may be more
@@ -312,143 +315,35 @@ corplot(airq.ens)
 
 <img src="inst/README-figures/README-corplot-1.png" width="500px" />
 
-Tuning parameters
------------------
+## Tuning parameters
 
-To obtain an optimal set of model-fitting parameters, function `train()`
-from package **`caret`** Kuhn (2008) can be employed. Package **`pre`**
-supports this through the `caret_pre_model` object (see also
-`?caret_pre_model`). Note that it’s best to specify the `x` and `y`
-arguments when using function `train()` to train the parameters of
-`pre()`; the use of the `formula` and `data` arguments may lead to
-unexpected results.
+To obtain an optimal set of model-fitting parameters, package
+**`caret`** Kuhn (2008) provides a method `"pre"`. For a manual on how
+to optimize the parameters of function `pre` using **`caret`**’s `train`
+function, see the vignette on tuning:
 
 ``` r
-## Load library
-library("caret")
-#> Loading required package: lattice
-#> Loading required package: ggplot2
-## Prepare data
-airq <- airquality[complete.cases(airquality),]
-y <- airq$Ozone
-x <- airq[,-1]
+vignette("tuning", package = "pre")
 ```
 
-The following parameters can be tuned:
+or open the vignette on <https://cran.r-project.org/package=pre/> in a
+browser.
+
+## Dealing with missing values
+
+Some suggestions on how to deal with missing values are provided in the
+following vignette:
 
 ``` r
-caret_pre_model$parameters
-#>         parameter     class                          label
-#> 1        sampfrac   numeric           Subsampling Fraction
-#> 2        maxdepth   numeric                 Max Tree Depth
-#> 3       learnrate   numeric                      Shrinkage
-#> 4            mtry   numeric # Randomly Selected Predictors
-#> 5        use.grad   logical       Employ Gradient Boosting
-#> 6 penalty.par.val character       Regularization Parameter
+vignette("missingness", package = "pre")
 ```
 
-Users can create a tuning grid manually, but it is probably easier to
-use the `caret_pre_model$grid` function, e.g.:
+or go to <https://cran.r-project.org/package=pre/> in a browser.
 
-``` r
-tuneGrid <- caret_pre_model$grid(x = x, y = y,
-                                 maxdepth = 3L:5L,
-                                 learnrate = c(.01, .1),
-                                 penalty.par.val = c("lambda.1se", "lambda.min"))
-tuneGrid
-#>    sampfrac maxdepth learnrate mtry use.grad penalty.par.val
-#> 1       0.5        3      0.01  Inf     TRUE      lambda.1se
-#> 2       0.5        4      0.01  Inf     TRUE      lambda.1se
-#> 3       0.5        5      0.01  Inf     TRUE      lambda.1se
-#> 4       0.5        3      0.10  Inf     TRUE      lambda.1se
-#> 5       0.5        4      0.10  Inf     TRUE      lambda.1se
-#> 6       0.5        5      0.10  Inf     TRUE      lambda.1se
-#> 7       0.5        3      0.01  Inf     TRUE      lambda.min
-#> 8       0.5        4      0.01  Inf     TRUE      lambda.min
-#> 9       0.5        5      0.01  Inf     TRUE      lambda.min
-#> 10      0.5        3      0.10  Inf     TRUE      lambda.min
-#> 11      0.5        4      0.10  Inf     TRUE      lambda.min
-#> 12      0.5        5      0.10  Inf     TRUE      lambda.min
-```
-
-Next, we apply function `train()`. Note that, in order to reduce
-computation time, I have specified the number of trees to be 50, but in
-real applications it should be left to the default value (i.e., not
-specified), unless you also want to tune the `ntrees` parameter:
-
-``` r
-set.seed(42)
-prefit2 <- train(x = x, y = y, method = caret_pre_model,
-                 trControl = trainControl(number = 1),
-                 tuneGrid = tuneGrid, ntrees = 50L)
-prefit2
-#> Prediction Rule Ensembles 
-#> 
-#> 111 samples
-#>   5 predictor
-#> 
-#> No pre-processing
-#> Resampling: Bootstrapped (1 reps) 
-#> Summary of sample sizes: 111 
-#> Resampling results across tuning parameters:
-#> 
-#>   maxdepth  learnrate  penalty.par.val  RMSE      Rsquared   MAE     
-#>   3         0.01       lambda.1se       19.83742  0.7310082  13.54601
-#>   3         0.01       lambda.min       20.00028  0.7120475  13.71055
-#>   3         0.10       lambda.1se       21.80688  0.6593462  14.81460
-#>   3         0.10       lambda.min       22.18347  0.6397186  15.96051
-#>   4         0.01       lambda.1se       21.26142  0.6716467  15.36146
-#>   4         0.01       lambda.min       21.77508  0.6543533  15.91652
-#>   4         0.10       lambda.1se       20.06575  0.7413488  13.61861
-#>   4         0.10       lambda.min       20.59871  0.7015281  14.01484
-#>   5         0.01       lambda.1se       22.03152  0.6612495  14.34614
-#>   5         0.01       lambda.min       22.82607  0.6233053  15.02192
-#>   5         0.10       lambda.1se       24.28906  0.5760883  16.47336
-#>   5         0.10       lambda.min       22.83246  0.6221208  15.34685
-#> 
-#> Tuning parameter 'sampfrac' was held constant at a value of 0.5
-#> 
-#> Tuning parameter 'mtry' was held constant at a value of Inf
-#> Tuning
-#>  parameter 'use.grad' was held constant at a value of TRUE
-#> RMSE was used to select the optimal model using the smallest value.
-#> The final values used for the model were sampfrac = 0.5, maxdepth =
-#>  3, learnrate = 0.01, mtry = Inf, use.grad = TRUE and penalty.par.val
-#>  = lambda.1se.
-```
-
-We can get the set of optimal parameter values:
-
-``` r
-prefit2$bestTune
-#>   sampfrac maxdepth learnrate mtry use.grad penalty.par.val
-#> 1      0.5        3      0.01  Inf     TRUE      lambda.1se
-```
-
-We can plot the effects of the tuning parameters:
-
-``` r
-plot(prefit2)
-```
-
-<img src="inst/README-figures/README-caretplot-1.png" width="600px" />
-
-And we can get predictions from the model with the best tuning
-parameters:
-
-``` r
-predict(prefit2, newdata = x[1:10, ])
-#>        1        2        3        4        7        8        9       12 
-#> 27.93810 27.86681 22.21110 22.64554 28.09927 22.06852 21.68236 22.85941 
-#>       13       14 
-#> 22.91882 22.71683
-```
-
-Generalized Prediction Ensembles: Combining MARS, rules and linear terms
-========================================================================
+# Generalized Prediction Ensembles: Combining MARS, rules and linear terms
 
 An even more flexible ensembling approach is implemented in function
-`gpe()`, which allows for fiting Generalized Prediction Ensembles: It
+`gpe()`, which allows for fitting Generalized Prediction Ensembles: It
 combines the MARS (multivariate Adaptive Splines) approach of Friedman
 (1991) with the RuleFit approach of Friedman & Popescu (2008). In other
 words, `gpe()` fits an ensemble composed of hinge functions (possibly
@@ -464,23 +359,23 @@ airq.gpe
 #> Final ensemble with cv error within 1se of minimum: 
 #>   lambda =  3.229132
 #>   number of terms = 11
-#>   mean cv error (se) = 361.2152 (110.9785)
+#>   mean cv error (se) = 359.2623 (110.8863)
 #> 
 #>   cv error type : Mean-squared Error
 #> 
 #>                                   description  coefficient
-#>                                   (Intercept)  65.52169487
-#>                                    Temp <= 77  -6.20973854
-#>                  Wind <= 10.3 & Solar.R > 148   5.46410965
-#>                       Wind > 5.7 & Temp <= 82  -8.06127416
+#>                                   (Intercept)  65.52169488
+#>                                    Temp <= 77  -6.20973855
+#>                  Wind <= 10.3 & Solar.R > 148   5.46410966
+#>                       Wind > 5.7 & Temp <= 82  -8.06127415
 #>                       Wind > 5.7 & Temp <= 84  -7.16921733
-#>                       Wind > 5.7 & Temp <= 87  -8.04255470
+#>                       Wind > 5.7 & Temp <= 87  -8.04255471
 #>           Wind > 5.7 & Temp <= 87 & Day <= 23  -3.40525575
 #>                       Wind > 6.3 & Temp <= 82  -2.71925536
 #>                       Wind > 6.3 & Temp <= 84  -5.99085126
 #>                       Wind > 6.9 & Temp <= 82  -0.04406376
 #>                       Wind > 6.9 & Temp <= 84  -0.55827336
-#>   eTerm(Solar.R * h(9.7 - Wind), scale = 410)   9.91783318
+#>   eTerm(Solar.R * h(9.7 - Wind), scale = 410)   9.91783320
 #> 
 #>   'h' in the 'eTerm' indicates the hinge function
 ```
@@ -491,46 +386,89 @@ hinge function and its coefficient indicate that Ozone levels increase
 with increasing solar radiation and decreasing wind speeds. The
 prediction rules in the ensemble indicate a similar pattern.
 
-Credits
-=======
+# Credits
 
-* Benjamin Chistoffersen : https://github.com/boennecd
+I am very grateful to package co-author Benjamin Chistoffersen:
+<https://github.com/boennecd>, who developed `gpe` and contributed
+tremendously by improving functions, code and computational aspects.
+Furthermore, I am grateful for the many helpful suggestions of Stephen
+Milborrow, and for the contributions of Karl Holub
+(<https://github.com/holub008>) and Advik Shreekumar
+(<https://github.com/adviksh>).
 
-* Karl Holub: https://github.com/holub008
+# References
 
+<div id="refs" class="references csl-bib-body hanging-indent"
+line-spacing="2">
 
-References
-==========
+<div id="ref-Breiman84" class="csl-entry">
 
 Breiman, L., Friedman, J., Olshen, R., & Stone, C. (1984).
 Classification and regression trees. Boca Raton, FL: Chapman & Hall /
 CRC.
 
-Fokkema, M. (2020). Fitting prediction rule ensembles with R package
-pre. *Journal of Statistical Software*, *92*(12), 1–30.
+</div>
 
-Fokkema, M., & Strobl, C. (2020). Fitting prediction rule ensembles to
-psychological research data: An introduction and tutorial.
-*Psychological Methods*, *25*(5), 636–652.
+<div id="ref-Fokkema20" class="csl-entry">
+
+Fokkema, M. (2020). Fitting prediction rule ensembles with R package
+pre. *Journal of Statistical Software*, *92*(12), 1–30. Retrieved from
+<https://doi.org/10.18637/jss.v092.i12>
+
+</div>
+
+<div id="ref-FokkemaStrobl20" class="csl-entry">
+
+Fokkema, M., & Strobl, C. (2020). <span class="nocase">Fitting
+prediction rule ensembles to psychological research data: An
+introduction and tutorial</span>. *Psychological Methods*, *25*(5),
+636–652. <https://doi.org/10.1037/met0000256>
+
+</div>
+
+<div id="ref-Friedman91" class="csl-entry">
 
 Friedman, J. (1991). Multivariate adaptive regression splines. *The
-Annals of Statistics*, *19*(1), 1–67.
+Annals of Statistics*, *19*, 1–67.
+
+</div>
+
+<div id="ref-Friedman08" class="csl-entry">
 
 Friedman, J., & Popescu, B. (2008). Predictive learning via rule
 ensembles. *The Annals of Applied Statistics*, *2*(3), 916–954.
-Retrieved from <http://www.jstor.org/stable/30245114>
+
+</div>
+
+<div id="ref-Hothorn06" class="csl-entry">
 
 Hothorn, T., Hornik, K., & Zeileis, A. (2006). Unbiased recursive
 partitioning: A conditional inference framework. *Journal of
 Computational and Graphical Statistics*, *15*(3), 651–674.
 
+</div>
+
+<div id="ref-Kuhn08" class="csl-entry">
+
 Kuhn, M. (2008). Building predictive models in R using the caret
 package. *Journal of Statistical Software*, *28*(5), 1–26.
 
-Milborrow, S. (2018). *plotmo: Plot a model’s residuals, response, and
-partial dependence plots*. Retrieved from
-<https://CRAN.R-project.org/package=plotmo>
+</div>
+
+<div id="ref-Milb18" class="csl-entry">
+
+Milborrow, S. (2018). *<span class="nocase">plotmo</span>: Plot a
+model’s residuals, response, and partial dependence plots*. Retrieved
+from <https://CRAN.R-project.org/package=plotmo>
+
+</div>
+
+<div id="ref-Zeileis08" class="csl-entry">
 
 Zeileis, A., Hothorn, T., & Hornik, K. (2008). Model-based recursive
 partitioning. *Journal of Computational and Graphical Statistics*,
 *17*(2), 492–514.
+
+</div>
+
+</div>
