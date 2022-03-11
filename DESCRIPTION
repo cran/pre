@@ -1,6 +1,6 @@
 Package: pre
 Title: Prediction Rule Ensembles
-Version: 1.0.2
+Version: 1.0.3
 Authors@R: c(person("Marjolein", "Fokkema", role = c("aut", "cre"), email = 
   "m.fokkema@fsw.leidenuniv.nl"), person(given = "Benjamin", 
   family = "Christoffersen", role = "aut", email = "boennecd@gmail.com"))
@@ -29,6 +29,6 @@ LazyData: true
 RoxygenNote: 7.1.1
 VignetteBuilder: knitr
 NeedsCompilation: no
-Packaged: 2022-02-25 02:28:53 UTC; fokkemam
+Packaged: 2022-03-11 19:20:17 UTC; fokkemam
 Repository: CRAN
-Date/Publication: 2022-02-25 08:00:02 UTC
+Date/Publication: 2022-03-12 00:10:02 UTC

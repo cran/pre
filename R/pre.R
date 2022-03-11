@@ -1593,7 +1593,7 @@ maxdepth_sampler <- function(av.no.term.nodes = 4L, av.tree.depth = NULL) {
 #' trade-off between accuracy and sparsity of the final ensemble, inspect
 #' \code{pre_object$glmnet.fit} and \code{plot(pre_object$glmnet.fit)}.
 #' @param digits Number of decimal places to print
-#' @param ... Additional arguments, currently not used.
+#' @param ... Additional arguments to be passed to \code{\link{coef.cv.glmnet}}.
 #' @return Prints information about the fitted prediction rule ensemble.
 #' @details Note that the cv error is estimated with data that was also used 
 #' for learning rules and may be too optimistic. Use \code{\link{cvpre}} to 
@@ -1650,7 +1650,7 @@ print.pre <- function(x, penalty.par.val = "lambda.1se",
       "\n  mean cv error (se) = ", rf(x$glmnet.fit$cvm[lambda_ind]), 
       " (", rf(x$glmnet.fit$cvsd[lambda_ind]), ")", "\n\n  cv error type : ",
       x$glmnet.fit$name, "\n\n", sep = "")
-  coefs <- coef(x, penalty.par.val = penalty.par.val)
+  coefs <- coef(x, penalty.par.val = penalty.par.val, ...)
   if (x$family %in% c("gaussian", "poisson", "binomial", "cox")) {
     coefs <- coefs[coefs$coefficient != 0, ]
   } else if (x$family %in% c("mgaussian", "multinomial")) {
@@ -1680,7 +1680,7 @@ print.pre <- function(x, penalty.par.val = "lambda.1se",
 #' 
 #' @param object An object of class \code{\link{pre}}.
 #' @inheritParams print.pre
-#' @param ... Additional arguments, currently not used.
+#' @param ... Additional arguments, to be passed to \code{\link[glmnet]{coef.cv.glmnet}}.
 #' @return Prints information about the fitted prediction rule ensemble.
 #' @details Note that the cv error is estimated with data that was also used 
 #' for learning rules and may be too optimistic. Use \code{\link{cvpre}} to 
@@ -1695,6 +1695,7 @@ print.pre <- function(x, penalty.par.val = "lambda.1se",
 #' @export
 summary.pre <- function(object, penalty.par.val = "lambda.1se", ...) {
   
+  
   if (class(object) != "pre") {
     stop("Argument 'object' should be of class 'pre'.")
   }
@@ -1706,21 +1707,42 @@ summary.pre <- function(object, penalty.par.val = "lambda.1se", ...) {
     stop("Argument 'penalty.par.val' should be equal to 'lambda.min', 'lambda.1se' or a numeric value >= 0.")
   }
   
-  if (penalty.par.val == "lambda.1se") {
-    lambda_ind <- which(object$glmnet.fit$lambda == object$glmnet.fit$lambda.1se)
-    cat("\nFinal ensemble with cv error within 1se of minimum: \n  lambda = ", 
-        object$glmnet.fit$lambda[lambda_ind])
-  }
-  if (penalty.par.val == "lambda.min") {
-    lambda_ind <- which(object$glmnet.fit$lambda == object$glmnet.fit$lambda.min)
-    cat("Final ensemble with minimum cv error: \n\n  lambda = ", 
-        object$glmnet.fit$lambda[lambda_ind])
-  }
-  if (is.numeric(penalty.par.val)) {
-    lambda_ind <- which(abs(object$glmnet.fit$lambda - penalty.par.val) == min(abs(
-      object$glmnet.fit$lambda - penalty.par.val)))
-    cat("Final ensemble with lambda = ", object$glmnet.fit$lambda[lambda_ind])
-  }
+  # if (inherits(object$glmnet.fit, "cv.relaxed")) {
+  #   if (penalty.par.val == "lambda.1se") {
+  #     lambda_ind <- which(object$glmnet.fit$relaxed$lambda == 
+  #                           object$glmnet.fit$relaxed$lambda.1se)
+  #     cat("\nFinal ensemble with cv error within 1se of minimum: \n  lambda = ", 
+  #         object$glmnet.fit$lambda[lambda_ind])
+  #   }
+  #   if (penalty.par.val == "lambda.min") {
+  #     lambda_ind <- which(object$glmnet.fit$relaxed$lambda == 
+  #                           object$glmnet.fit$relaxed$lambda.min)
+  #     cat("Final ensemble with minimum cv error: \n\n  lambda = ", 
+  #         object$glmnet.fit$lambda[lambda_ind])
+  #   }
+  #   ## THEN GAMMA MUST BE PROVIDED:
+  #   if (is.numeric(penalty.par.val)) {
+  #     lambda_ind <- which(abs(object$glmnet.fit$lambda - penalty.par.val) == min(abs(
+  #       object$glmnet.fit$lambda - penalty.par.val)))
+  #     cat("Final ensemble with lambda = ", object$glmnet.fit$lambda[lambda_ind])
+  #   }
+  # } else {
+    if (penalty.par.val == "lambda.1se") {
+      lambda_ind <- which(object$glmnet.fit$lambda == object$glmnet.fit$lambda.1se)
+      cat("\nFinal ensemble with cv error within 1se of minimum: \n  lambda = ", 
+          object$glmnet.fit$lambda[lambda_ind])
+    }
+    if (penalty.par.val == "lambda.min") {
+      lambda_ind <- which(object$glmnet.fit$lambda == object$glmnet.fit$lambda.min)
+      cat("Final ensemble with minimum cv error: \n\n  lambda = ", 
+          object$glmnet.fit$lambda[lambda_ind])
+    }
+    if (is.numeric(penalty.par.val)) {
+      lambda_ind <- which(abs(object$glmnet.fit$lambda - penalty.par.val) == min(abs(
+        object$glmnet.fit$lambda - penalty.par.val)))
+      cat("Final ensemble with lambda = ", object$glmnet.fit$lambda[lambda_ind])
+    }
+  #}
   cat("\n  number of terms = ", object$glmnet.fit$nzero[lambda_ind], 
       "\n  mean cv error (se) = ", object$glmnet.fit$cvm[lambda_ind], 
       " (", object$glmnet.fit$cvsd[lambda_ind], ")", "\n\n  cv error type : ",
@@ -2190,6 +2212,7 @@ predict.pre <- function(object, newdata = NULL, type = "link",
   
   ## Get predictions:
   if (object$family %in% c("gaussian", "binomial", "poisson", "cox")) {
+    
     preds <- predict(object$glmnet.fit, newx = newdata, 
                      s = penalty.par.val, type = type, ...)[,1]
   } else if (object$family %in% c("mgaussian", "multinomial")) {

@@ -167,3 +167,16 @@ plot(preds, main = "Observed against predicted", cex.main = .8)
 boxplot(nterms, main = "Number of selected terms per missing-data method",
         cex.main = .8)
 
+## ---- echo = FALSE------------------------------------------------------------
+# Austin et al. (2019) refer to Wood et al. (2008) for stacking with multiply imputed data:
+# 
+# "Stacked Imputed Datasets With Weighted Regressions (W1, W2, and W3)
+# 
+# This approach entails stacking the M imputed datasets into 1 large dataset and then conducting variable selection in this single stacked dataset. To account for the multiple observations for each subject, weights are incorporated into the regression model when conducting variable selection. Wood et al proposed 3 different sets of weights that could be used: W1: w=1/M, in which each subject is weighted using the reciprocal of the number of imputed datasets; W2: w=(1−f)/M, where f denotes the proportion of missing data across all variables; W3: wj=(1−fj)/M, where fj denotes the proportion of missing data for variable Xj. Using the third approach, a different set of weights is used when assessing the statistical significance of a given candidate predictor variable."
+# 
+# Austin, P. C., Lee, D. S., Ko, D. T., & White, I. R. (2019). Effect of variable selection strategy on the performance of prognostic models when using multiple imputation. Circulation: Cardiovascular Quality and Outcomes, 12(11), e005927.
+# 
+# Wood, A. M., White, I. R., & Royston, P. (2008). How should variable selection be performed with multiply imputed data?. Statistics in medicine, 27(17), 3227-3246.
+
+## Does glmnet allow for such an approach? Seems not, as weights are scaled automatically, see also https://stats.stackexchange.com/a/196615/173546
+
