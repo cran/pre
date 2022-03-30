@@ -1,8 +1,16 @@
+Changes in Version 1.0.4 (2022-03-30)
+
+  - Implemented relaxed lasso fits and added vignette on relaxed fits, 
+      see vignette("relaxed", "pre")
+
+  - More informative warning message if no rules could be derived.
+
+
+
+
 Changes in Version 1.0.3 (2022-02-24)
 
   - No news, update to fix failing test.
-
-
 
 
 
@@ -26,8 +34,6 @@ Changes in Version 1.0.2 (2022-02-24)
   - Added progress bar indicating tree fitting progress.
 
   - Argument singleconditions implemented in function pre() (experimental).
-
-
 
 
 

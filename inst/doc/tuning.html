@@ -13,7 +13,7 @@
 <meta name="author" content="Marjolein Fokkema" />
 
 
-<title>Tuning parameters of function pre</title>
+<title>Tuning the parameters of function pre</title>
 
 <script src="data:application/javascript;base64,Ly8gUGFuZG9jIDIuOSBhZGRzIGF0dHJpYnV0ZXMgb24gYm90aCBoZWFkZXIgYW5kIGRpdi4gV2UgcmVtb3ZlIHRoZSBmb3JtZXIgKHRvCi8vIGJlIGNvbXBhdGlibGUgd2l0aCB0aGUgYmVoYXZpb3Igb2YgUGFuZG9jIDwgMi44KS4KZG9jdW1lbnQuYWRkRXZlbnRMaXN0ZW5lcignRE9NQ29udGVudExvYWRlZCcsIGZ1bmN0aW9uKGUpIHsKICB2YXIgaHMgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yQWxsKCJkaXYuc2VjdGlvbltjbGFzcyo9J2xldmVsJ10gPiA6Zmlyc3QtY2hpbGQiKTsKICB2YXIgaSwgaCwgYTsKICBmb3IgKGkgPSAwOyBpIDwgaHMubGVuZ3RoOyBpKyspIHsKICAgIGggPSBoc1tpXTsKICAgIGlmICghL15oWzEtNl0kL2kudGVzdChoLnRhZ05hbWUpKSBjb250aW51ZTsgIC8vIGl0IHNob3VsZCBiZSBhIGhlYWRlciBoMS1oNgogICAgYSA9IGguYXR0cmlidXRlczsKICAgIHdoaWxlIChhLmxlbmd0aCA+IDApIGgucmVtb3ZlQXR0cmlidXRlKGFbMF0ubmFtZSk7CiAgfQp9KTsK"></script>
 
@@ -25,6 +25,7 @@
   div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
   ul.task-list{list-style: none;}
     </style>
+
 
 
 <style type="text/css">
@@ -138,14 +139,14 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 
 
 
-<h1 class="title toc-ignore">Tuning parameters of function pre</h1>
+<h1 class="title toc-ignore">Tuning the parameters of function pre</h1>
 <h4 class="author">Marjolein Fokkema</h4>
 
 
 
 <div id="introduction" class="section level2">
 <h2>Introduction</h2>
-<p>Function <code>pre()</code> has a substantial number of model-fitting parameters, which may be tuned so as to optimize predictive accuracy and/or interpretability (sparsity) of the final model. For many of the parameters, default settings will likely perform well. Here, we discuss the effects of several of the parameters on predictive accuracy and model complexity. We will not explain what every argument does; readers are referred to the documentation of function <code>pre()</code> for that, or readers can consult Fokkema (2020). We then illustrate how to optimize predictive accuracy for a binary classification problem.</p>
+<p>Function <code>pre()</code> has a substantial number of model-fitting parameters, which may be tuned so as to optimize predictive accuracy and/or interpretability (sparsity) of the final model. For many of the parameters, default settings will likely perform well. Here, we discuss the effects of several of the parameters on predictive accuracy and model complexity. Next, we illustrate how to optimize predictive accuracy for a binary classification problem using package <strong><code>caret</code></strong>. We do not explain each argument in detail; readers are referred to the documentation of function <code>pre()</code> for that, or Fokkema (2020).</p>
 </div>
 <div id="tuning-parameters" class="section level2">
 <h2>Tuning parameters</h2>
@@ -257,6 +258,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(opt_pre_mod, <span class="at">penalty.par.val =</span> <span class="st">&quot;lambda.1se&quot;</span>)</span></code></pre></div>
 <pre><code>## 
 ## Final ensemble with cv error within 1se of minimum: 
+## 
 ##   lambda =  0.07459569
 ##   number of terms = 11
 ##   mean cv error (se) = 1.235626 (0.07320966)
@@ -291,6 +293,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <div class="sourceCode" id="cb27"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(def_pre_mod)</span></code></pre></div>
 <pre><code>## 
 ## Final ensemble with cv error within 1se of minimum: 
+## 
 ##   lambda =  0.04362989
 ##   number of terms = 10
 ##   mean cv error (se) = 1.317266 (0.06728047)

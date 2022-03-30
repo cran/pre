@@ -1,4 +1,4 @@
-## ---- results='hide', message=FALSE, warning=FALSE, fig.width=7---------------
+## ---- results='hide', message=FALSE, warning=FALSE, fig.width=5---------------
 head(airquality)
 nrow(airquality)
 library("mice")
@@ -68,16 +68,10 @@ agg_preds
 ## -----------------------------------------------------------------------------
 coef.agg <- function(object, ...) {
   coefs <- coef(object[[1]], ...)
-  coefs <- coefs[coefs$coefficient != 0,]
+  coefs <- coefs[coefs$coefficient != 0, ]
   for (i in 2:length(object)) {
     coefs_tmp <- coef(object[[i]], ...)
-    coefs_tmp <- coefs_tmp[coefs_tmp$coefficient != 0,]
-    ## Add intercepts:
-    coefs[coefs$rule == "(Intercept)", "coefficient"] <- 
-      coefs[coefs$rule == "(Intercept)", "coefficient"] + 
-      coefs_tmp[coefs_tmp$rule == "(Intercept)", "coefficient"]
-    ## Append other terms rest to coefs:
-    coefs <- rbind(coefs, coefs_tmp[coefs_tmp$rule!= "(Intercept)", ])
+    coefs <- rbind(coefs, coefs_tmp[coefs_tmp$coefficient != 0, ])
   }
   ## Divide coefficients by the number of datasets:
   coefs$coefficient <- coefs$coefficient / length(object)
@@ -90,6 +84,14 @@ coef.agg <- function(object, ...) {
       coefs$coefficient[first_match] + coefs$coefficient[i]
   }
   ## Remove duplicates:
+  coefs <- coefs[-duplicates, ]
+  ## Check if there are- duplicate linear terms left and repeat:
+  duplicates <- which(duplicated(coefs$rule))
+  for (i in duplicates) {
+    first_match <- which(coefs$rule == coefs$rule[i])[1]
+    coefs$coefficient[first_match] <- 
+      coefs$coefficient[first_match] + coefs$coefficient[i]
+  }
   coefs <- coefs[-duplicates, ]
   ## Return results:
   coefs
@@ -111,9 +113,9 @@ coef.agg(airq.agg)
 #  }
 #  
 #  preds <- data.frame(observed)
-#  preds$LW <- preds$SI <- preds$MI <- preds$observed
+#  preds$LWD <- preds$SI <- preds$MI <- preds$observed
 #  nterms <- matrix(nrow = k, ncol = 3)
-#  colnames(nterms) <- c("LW", "SI", "MI")
+#  colnames(nterms) <- c("LWD", "SI", "MI")
 #  row <- 1
 #  
 #  for (i in 1:k) {
@@ -128,9 +130,9 @@ coef.agg(airq.agg)
 #  
 #    ## Fit and evaluate listwise deletion
 #    premod <- pre(Wind ~ ., data = train)
-#    preds$LW[row:(row+nrow(test)-1)] <- predict(premod, newdata = test)
+#    preds$LWD[row:(row+nrow(test)-1)] <- predict(premod, newdata = test)
 #    tmp <- print(premod)
-#    nterms[i, "LW"] <- nrow(tmp) - 1
+#    nterms[i, "LWD"] <- nrow(tmp) - 1
 #  
 #    ## Fit and evaluate single imputation
 #    imp0 <- train
@@ -163,9 +165,13 @@ load("Missing_data_results.Rda")
 sapply(preds, function(x) mean((preds$observed - x)^2)) ## MSE
 sapply(preds, function(x) sd((preds$observed - x)^2)/sqrt(nrow(preds))) ## SE of MSE
 var(preds$observed) ## benchmark: Predict mean for all
-plot(preds, main = "Observed against predicted", cex.main = .8)
-boxplot(nterms, main = "Number of selected terms per missing-data method",
+
+## ---- fig.width=4, fig.height=4-----------------------------------------------
+boxplot(nterms, main = "Number of selected terms \nper missing-data method",
         cex.main = .8)
+
+## -----------------------------------------------------------------------------
+sessionInfo()
 
 ## ---- echo = FALSE------------------------------------------------------------
 # Austin et al. (2019) refer to Wood et al. (2008) for stacking with multiply imputed data:

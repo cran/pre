@@ -9,6 +9,7 @@ pairplot(
   object,
   varnames,
   type = "both",
+  gamma = NULL,
   penalty.par.val = "lambda.1se",
   nvals = c(20L, 20L),
   pred.type = "response",
@@ -26,6 +27,9 @@ variables of class \code{"factor"}, an error will be printed.}
 \code{type = "heatmap"} yields a heatmap plot, \code{type = "contour"} yields 
 a contour plot, \code{type = "both"} yields a heatmap plot with added contours,
 \code{type = "perspective"} yields a three dimensional plot.}
+
+\item{gamma}{Mixing parameter for relaxed fits. See
+\code{\link[glmnet]{coef.cv.glmnet}}.}
 
 \item{penalty.par.val}{character or numeric. Value of the penalty parameter
 \eqn{\lambda} to be employed for selecting the final ensemble. The default
@@ -46,7 +50,7 @@ values for the two predictor variables specified will be used (see details).}
 fitted probabilities for nominal outputs. \code{pred.type = "link"} gives fitted
 values for continuous outputs and linear predictor values for nominal outputs.}
 
-\item{...}{Additional arguments to be passed to \code{\link[graphics]{image}}, 
+\item{...}{Further arguments to be passed to \code{\link[graphics]{image}}, 
 \code{\link[graphics]{contour}} or \code{\link[graphics]{persp}} (depending on
 whether \code{type} is specified to be \code{"heatmap"}, \code{"contour"}, \code{"both"} 
 or \code{"perspective"}).}
