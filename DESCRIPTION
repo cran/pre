@@ -1,6 +1,6 @@
 Package: pre
 Title: Prediction Rule Ensembles
-Version: 1.0.4
+Version: 1.0.5
 Authors@R: c(person("Marjolein", "Fokkema", role = c("aut", "cre"), email = 
   "m.fokkema@fsw.leidenuniv.nl"), person(given = "Benjamin", 
   family = "Christoffersen", role = "aut", email = "boennecd@gmail.com"))
@@ -20,7 +20,7 @@ BugReports: https://github.com/marjoleinF/pre/issues
 Depends: R (>= 3.5.0)
 Imports: earth, Formula, glmnet, graphics, methods, partykit (>=
         1.2-0), rpart, stringr, survival, Matrix, MatrixModels
-Suggests: akima, datasets, doParallel, foreach, glmertree, grid,
+Suggests: interp, datasets, doParallel, foreach, glmertree, grid,
         mlbench, testthat, mboost, ggplot2, caret, pROC, knitr,
         rmarkdown, mice
 License: GPL-2 | GPL-3
@@ -29,6 +29,6 @@ LazyData: true
 RoxygenNote: 7.1.2
 VignetteBuilder: knitr
 NeedsCompilation: no
-Packaged: 2022-03-29 22:26:52 UTC; fokkemam
+Packaged: 2022-06-10 18:28:34 UTC; fokkemam
 Repository: CRAN
-Date/Publication: 2022-03-30 07:00:12 UTC
+Date/Publication: 2022-06-10 21:20:08 UTC
