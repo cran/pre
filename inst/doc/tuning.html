@@ -109,13 +109,20 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
   for (var i = 0; i < sheets.length; i++) {
     if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
     try { var rules = sheets[i].cssRules; } catch (e) { continue; }
-    for (var j = 0; j < rules.length; j++) {
+    var j = 0;
+    while (j < rules.length) {
       var rule = rules[j];
       // check if there is a div.sourceCode rule
-      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") continue;
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
       var style = rule.style.cssText;
       // check if color or background-color is set
-      if (rule.style.color === '' && rule.style.backgroundColor === '') continue;
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
       // replace div.sourceCode by a pre.sourceCode rule
       sheets[i].deleteRule(j);
       sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
@@ -270,7 +277,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 ##        rule31   0.48357486    n3 &gt; 13 &amp; e1 &gt; 18 &amp; open3 &gt; 18
 ##       rule232  -0.38229846  e5 &gt; 12 &amp; open6 &lt;= 22 &amp; n3 &lt;= 17
 ##       rule627  -0.26965307            n3 &lt;= 16 &amp; altot &lt;= 50
-##       rule290   0.26918576                 bdi &gt; 6 &amp; e4 &gt; 17
+##       rule290   0.26918577                 bdi &gt; 6 &amp; e4 &gt; 17
 ##         rule9  -0.14433149             e5 &gt; 10 &amp; open1 &lt;= 18
 ##       rule158   0.10740358                e5 &lt;= 18 &amp; n1 &gt; 13
 ##       rule485   0.09783142                e5 &lt;= 18 &amp; n4 &gt; 12

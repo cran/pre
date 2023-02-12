@@ -1301,14 +1301,17 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
     } else { ## use.grad is FALSE, employ (g)lmtrees with offset:
       
       ## initialize with 0 offset:
-      offset <- rep(0, times = nrow(data))
+      ##offset <- rep(0, times = nrow(data))
+      data$.offset <- rep(0, times = nrow(data))
       
       for(i in 1:ntrees) {
         
         # Take subsample of dataset:
         glmtree_args$data <- data[subsample[[i]], ]
         glmtree_args$weights <- weights[subsample[[i]]]
-        glmtree_args$offset <- offset[subsample[[i]]] 
+        ##glmtree_args$offset <- offset[subsample[[i]]] 
+        glmtree_args$offset <- bquote(.offset)
+        
         if (length(maxdepth) > 1L) {
           glmtree_args$maxdepth <- maxdepth[i] + 1L
         }
@@ -1324,11 +1327,13 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
         # Update offset (note: do not use a dataset which includes the offset for prediction!!!):
         if (learnrate > 0) {
           if (family == "gaussian") {
-            offset <- offset + learnrate * 
-              suppressWarnings(predict(tree, newdata = data))
+            data$.offset <- data$.offset + learnrate * 
+              #suppressWarnings(
+              predict(tree, newdata = data)#)
           } else {
-            offset <- offset + learnrate * 
-              suppressWarnings(predict(tree, newdata = data, type = "link"))
+            data$.offset <- data$.offset + learnrate * 
+              #suppressWarnings(
+              predict(tree, newdata = data, type = "link")#)
           }
         }
       }
@@ -2175,7 +2180,9 @@ coef.pre <- function(object, penalty.par.val = "lambda.1se", ...)
 #' set.seed(42)
 #' airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),][train,])
 #' predict(airq.ens)
-#' predict(airq.ens, newdata = airquality[complete.cases(airquality),][-train,])}
+#' predict(airq.ens, newdata = airquality[complete.cases(airquality),][-train,])
+#' 
+#' }
 #' @import Matrix
 #' @method predict pre
 #' @seealso \code{\link{pre}}, \code{\link{plot.pre}}, 
