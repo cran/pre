@@ -1,14 +1,16 @@
+## TODO: Implement rug plots for quantiles in singleplot() and pairplot
+
+## TODO: Fix local variable importances. E.g., implement centering in explain. Or do someth
+
+## TODO: Implement condition filtering for rules involving multiple splits on the same variable
+
 ## TODO: Shorten code for argument checking: 
 ##          Group variables and check each group like: 
 ##          L <- list(A, B, C) all(sapply(L, class) == "matrix") or any(is.na(unlist(L)))
 
-
-
 ## TODO: Implement functionality for missing-in-attributes approach for missing values
 ## MIA is supported by ctree. Can then do mean imputation before glmnet. 
 ## Will need some work with predict method?
-
-
 
 ## TODO: Implement unit tests for correct passing of gamma argument
 ## TODO: Implement unit tests for function interact() without nullmods
@@ -48,6 +50,16 @@ utils::globalVariables("%dopar%")
 #' Otherwise, the program will try to make an informed guess, based on the 
 #' class of the response variable specified in \code{formula}. als see Examples 
 #' below. 
+#' @param ad.alpha Alpha value to be used for computing the penalty weights for the
+#' adaptive lasso. Defaults to \code{NA}, yielding standard lasso estimation. 
+#' To use adaptive lasso, specify a value between (and including) 0 and 1. A value of
+#' 0 will yield ridge-estimated penalty weights for computing the final (lasso) 
+#' penalized model. See \code{vignette("relaxed", "pre")} or 
+#' argument \code{alpha} of \code{\link[glmnet]{cv.glmnet}}.
+#' @param ad.penalty Penalty parameter value to be used for computing the penalty 
+#' weights for the adaptive lasso. Defaults to \code{"lambda.min"}. If OLS instead
+#' of elastic net regression should be used to compute weights, specify 
+#' \code{ad.penalty = 0}. See also \code{vignette("relaxed", "pre")}.
 #' @param use.grad logical. Should gradient boosting with regression trees be
 #' employed when \code{learnrate > 0}? If \code{TRUE}, use trees fitted by 
 #' \code{\link[partykit]{ctree}} or \code{\link[rpart]{rpart}} as in Friedman 
@@ -142,7 +154,7 @@ utils::globalVariables("%dopar%")
 #' @param ... Further arguments to be passed to
 #' \code{\link[glmnet]{cv.glmnet}}.
 #' 
-#' @details Note: obervations with missing values will be removed prior to 
+#' @details Note that obervations with missing values will be removed prior to 
 #' analysis (and a warning printed).
 #' 
 #' In some cases, duplicated variable names may appear in the model.
@@ -212,11 +224,20 @@ utils::globalVariables("%dopar%")
 #' methods for objects of class \code{pre} take a \code{penalty.parameter.val} 
 #' argument, which can be used to select a different criterion.
 #' 
+#' If only a set of rules needs to be generated, but the final regression model
+#' should not be fitted, specify the hidden argument \code{fit.final = FALSE}.
+#' 
 #' @examples \donttest{## Fit pre to a continuous response:
 #' airq <- airquality[complete.cases(airquality), ]
 #' set.seed(42)
 #' airq.ens <- pre(Ozone ~ ., data = airq)
 #' airq.ens
+#' ## Use relaxed lasso to estimate final model
+#' airq.ens.rel <- pre(Ozone ~ ., data = airq, relax = TRUE)
+#' airq.ens.rel
+#' ## Use adaptive lasso to estimate final model
+#' airq.ens.ad <- pre(Ozone ~ ., data = airq, ad.alpha = 0)
+#' airq.ens.ad
 #' 
 #' ## Fit pre to a binary response:
 #' airq2 <- airquality[complete.cases(airquality), ]
@@ -278,7 +299,7 @@ utils::globalVariables("%dopar%")
 #' partytioning in R. \emph{Journal of Machine Learning Research, 16}, 3905-3909.
 #' 
 #' @export
-pre <- function(formula, data, family = gaussian,
+pre <- function(formula, data, family = gaussian, ad.alpha = NA, ad.penalty = "lambda.min",
                 use.grad = TRUE, weights, type = "both", sampfrac = .5, 
                 maxdepth = 3L, learnrate = .01, mtry = Inf, ntrees = 500,
                 confirmatory = NULL, singleconditions = FALSE,
@@ -293,7 +314,7 @@ pre <- function(formula, data, family = gaussian,
   ## Check arguments ##
   #####################
   
-  ## Save cll:
+  ## Save call:
   cl <- match.call()
   
   ## Check if proper formula argument is specified 
@@ -353,8 +374,16 @@ pre <- function(formula, data, family = gaussian,
   ## Check if proper weights argument is specified, if specified:
   if (missing(weights)) {
     weights <- rep(1L, times = nrow(data))
-  } else if (length(weights) != nrow(data)) {
-      warning("Length of argument weights is not equal to nrow(data).\n", immediate. = TRUE)
+  } else {
+    if (!is.numeric(weights)) {
+      warning("Argument weights should, but does not specify a vector of numeric values.\n", immediate. = TRUE)
+    }
+    if (length(weights) != nrow(data)) {
+      warning("Length of argument weights should be, but is not equal to nrow(data).\n", immediate. = TRUE)
+    }
+    if (!all(weights > 0)) {
+      warning("All weights should be positive but some are not.\n", immediate. = TRUE)
+    }
   }
   
   ## Check if proper type argument is specified:
@@ -456,19 +485,27 @@ pre <- function(formula, data, family = gaussian,
     }
   } else {
     if (!is.list(tree.control)) {
-      stop("Argument tree.control should be a list of control parameters.\n")
+      stop("Argument tree.control should specify a list of control parameters.\n")
     }
     if (use.grad && tree.unbiased) {
       if (!setequal(names(ctree_control()), names(tree.control))) {
-        stop("Argument tree.control should be a list containing named elements ", paste(names(ctree_control()), collapse = ', '), "\n")
+        args_not_in_ctree_control <- names(tree.control)[which(
+          !names(tree.control) %in% names(ctree_control()))]
+        warning("Argument tree.control contains named elements: ", 
+                paste0(args_not_in_ctree_control, collapse = ", "), 
+                ", which should probably not be there, see ?ctree_control.\n")
       }
     } else if (!use.grad && tree.unbiased) { 
       if (!setequal(names(mob_control()), names(tree.control))) {
-        stop("Argument tree.control should be a list containing named elements ", paste(names(mob_control()), collapse = ', '), "\n")
+        args_not_in_glmtree_control <- names(tree.control)[which(
+          !names(tree.control) %in% names(mob_control()))]
+        warning("Argument tree.control has named elements ", 
+                 paste0(args_not_in_glmtree_control, collapse = ", "), 
+                ", which should probably not be there, see ?mob_control.\n")
       }
     } else if (!tree.unbiased) {
       if (!setequal(names(rpart.control()), names(tree.control))) {
-        stop("Argument tree.control should be a list containing names elements ", paste(names(rpart.control()), collapse = ', '), "\n")
+        warning("Argument tree.control should be a list containing names elements ", paste(names(rpart.control()), collapse = ', '), "\n")
       }
     }
     if (use.grad) { ## if ctree or rpart are employed:
@@ -493,8 +530,20 @@ pre <- function(formula, data, family = gaussian,
   ## Prepare data, formula and family ##
   ######################################
 
+  if (!is.null(tree.control$cluster)) {
+    ## If cluster variable has been specified, make sure it is included in data 
+    if (!inherits(tree.control$cluster, "name")) 
+      warning("A cluster argument was passed to argument tree.control, but it is not a name, so it might be ignored. ")
+    cluster <- data[ , as.character(tree.control$cluster)]
+  }
+  
   ## prepare model frame:
   data <- model.frame(Formula::as.Formula(formula), data = data, na.action = NULL)
+  if (!is.null(tree.control$cluster)) {
+    ## If cluster variable has been specified, make sure it is included in data 
+    data[ , as.character(tree.control$cluster)] <- cluster
+  }
+
 
   ## Coerce character and logical variables to factors:
   if (any(char_names <- sapply(data, is.character))) {
@@ -676,17 +725,17 @@ pre <- function(formula, data, family = gaussian,
 
   if (verbose) {
     if (family == "gaussian") {
-      cat("A rule ensemble for prediction of a continuous response will be created.\n")
+      cat("\nA rule ensemble for prediction of a continuous response will be created.\n")
     } else if (family == "poisson") {     
-      cat("A rule ensemble for prediction of a count response will be created.\n")
+      cat("\nA rule ensemble for prediction of a count response will be created.\n")
     } else if (family == "binomial") {
-      cat("A rule ensemble for prediction of a binary categorical response will be created.\n")
+      cat("\nA rule ensemble for prediction of a binary categorical response will be created.\n")
     } else if (family == "multinomial") {
-      cat("A rule ensemble for prediction of a categorical response with > 2 levels will be created.\n")
+      cat("\nA rule ensemble for prediction of a multinomial response will be created.\n")
     } else if (family == "mgaussian") {
-      cat("A rule ensemble for prediction of a multivariate continuous response will be created.\n")
+      cat("\nA rule ensemble for prediction of a multivariate continuous response will be created.\n")
     } else if (family == "cox") {
-      cat("A rule ensemble for prediction of a survival response will be created.\n")
+      cat("\nA rule ensemble for prediction of a survival response will be created.\n")
     }
   }
   
@@ -722,7 +771,7 @@ pre <- function(formula, data, family = gaussian,
                                  sparse = sparse))
     if (inherits(rule_object, "try-error")) {
       if (grepl("has new levels", rule_object)) {
-        stop(rule_object[1], paste("\n Hint: There may be a predictor variable which is a factor with rare levels. Consult ?rare_level_sampler"))
+        stop(rule_object[1], paste("\n Hint: There may be a predictor variable which is a factor with rare levels, this likely yields problems for rule estimation. Consult ?rare_level_sampler"))
       }
       stop(rule_object[1])
     }
@@ -774,46 +823,77 @@ pre <- function(formula, data, family = gaussian,
   if (!is.null(confirmatory)) {
     penalty.factor[which(colnames(x) %in% confirmatory)] <- 0L
   }
-  
-  if (!is.null(cl$fit.final)) {
-    result <- list(call = cl, weights = weights, 
-                   data = data, normalize = normalize, x_scales = x_scales, 
-                   type = type, x_names = x_names, y_names = y_names, 
-                   modmat = x, wins_points = wins_points, family = family, 
-                   formula = formula)
-    if (type != "linear" & length(rules) > 0L) {
-      result$complements.removed <- rule_object$complements.removed
-      result$duplicates.removed <- rule_object$duplicates.removed
-      result$rules <- data.frame(rule = names(rules), 
-                                 description = rules, 
-                                 stringsAsFactors = FALSE)
-    } 
-    
-    class(result) <- "pre"
-    return(result)
-  }
-  
-  # check whether there's duplicates in the variable names:
-  # (can happen, for example, due to labeling of dummy indicators for factors)
+
+  ## check for duplicates in variable names:
+  ## (can happen, for example, due to labeling of dummy indicators for factors)
   if (!(length(unique(colnames(x))) == length(colnames(x)))) { 
     warning("There are variables in the model with overlapping variable names. If predictor variables of type factor were specified with numbers in their name, consider renaming these and rerunning the analysis. See 'Details' under ?pre.") 
   } 
-  glmnet.fit <- cv.glmnet(x, y, nfolds = nfolds, weights = weights, 
-                          family = family, parallel = par.final, 
-                          standardize = standardize, 
-                          penalty.factor = penalty.factor,
-                          ...)
-  lmin_ind <- which(glmnet.fit$lambda == glmnet.fit$lambda.min)
-  l1se_ind <- which(glmnet.fit$lambda == glmnet.fit$lambda.1se)
-  if (verbose) {
-    cat("\n\nFinal ensemble with minimum cv error: \n  lambda = ", 
-        glmnet.fit$lambda[lmin_ind], "\n  number of terms = ", 
-        glmnet.fit$nzero[lmin_ind], "\n  mean cv error (se) = ", 
-        glmnet.fit$cvm[lmin_ind], " (", glmnet.fit$cvsd[lmin_ind], ")", 
-        "\n\nFinal ensemble with cv error within 1se of minimum: \n  lambda = ", 
-        glmnet.fit$lambda[l1se_ind],  "\n  number of terms = ", 
-        glmnet.fit$nzero[l1se_ind], "\n  mean cv error (se) = ", 
-        glmnet.fit$cvm[l1se_ind], " (", glmnet.fit$cvsd[l1se_ind], ")\n", sep="")
+  
+  if (!is.null(cl$fit.final)) { ## Hidden argument has been used
+    if (!cl$fit.final) {
+      glmnet.fit <- NULL 
+      if (verbose) cat("\n\nThe final penalized regression model will not be fit.\n")
+    } else {
+      warning("Hidden argument fit.final was specified, but it was not set to FALSE and will likely be ignored.")
+    }
+  } else {
+    if (is.na(ad.alpha)) {
+      glmnet.fit <- cv.glmnet(x, y, nfolds = nfolds, weights = weights, 
+                              family = family, parallel = par.final, 
+                              standardize = standardize, 
+                              penalty.factor = penalty.factor,
+                              ...)
+    } else { ## use adaptive lasso, apply cv.glmnet twice
+      
+      cv.glmnet.args <- list(...)
+      ## Fix fold ids for reuse
+      cv.glmnet.args$foldid <- if (is.null(cl$foldid)) 
+        sample(rep(1:nfolds, length = nrow(data))) else cl$foldid
+      cv.glmnet.args$x <- x
+      cv.glmnet.args$y <- y
+      cv.glmnet.args$weights <- weights
+      cv.glmnet.args$family <- family
+      cv.glmnet.args$parallel <- par.final
+      cv.glmnet.args$standardize <- standardize
+      cv.glmnet.args$alpha <- ad.alpha
+      cv.glmnet.args$penalty.factor <- penalty.factor
+      cv.glmnet.args$relax <- FALSE
+      
+      ## Compute penalty weights
+      glmnet.fit <- do.call(cv.glmnet, cv.glmnet.args)
+      penalty.factor <- coef(glmnet.fit, s = ad.penalty)
+      if (is.list(penalty.factor)) {
+        penalty.factor <- rowMeans(do.call(cbind, penalty.factor))
+        penalty.factor <- 1L / abs(as.numeric(penalty.factor)[
+          -which(names(penalty.factor) == "(Intercept)")])
+      } else {
+        penalty.factor <- 1L / abs(as.numeric(penalty.factor)[
+          -which(rownames(penalty.factor) == "(Intercept)")])
+      }
+      if (!is.null(cl$confirmatory)) {
+        penalty.factor[which(colnames(x) %in% cl$confirmatory)] <- 0L
+      }
+      
+      ## Fit final model
+      cv.glmnet.args$alpha <- if (is.null(cl$alpha)) 1 else cl$alpha
+      cv.glmnet.args$penalty.factor <- penalty.factor
+      cv.glmnet.args$relax <- if (is.null(cl$relax)) FALSE else cl$relax
+      glmnet.fit <- do.call(cv.glmnet, cv.glmnet.args)
+
+    }
+    lmin_ind <- which(glmnet.fit$lambda == glmnet.fit$lambda.min)
+    l1se_ind <- which(glmnet.fit$lambda == glmnet.fit$lambda.1se)
+    if (verbose) {
+      cat("\n\nFinal ensemble with minimum cv error: \n  lambda = ", 
+          glmnet.fit$lambda[lmin_ind], "\n  number of terms = ", 
+          glmnet.fit$nzero[lmin_ind], "\n  mean cv error (se) = ", 
+          glmnet.fit$cvm[lmin_ind], " (", glmnet.fit$cvsd[lmin_ind], ")", 
+          "\n\nFinal ensemble with cv error within 1se of minimum: \n  lambda = ", 
+          glmnet.fit$lambda[l1se_ind],  "\n  number of terms = ", 
+          glmnet.fit$nzero[l1se_ind], "\n  mean cv error (se) = ", 
+          glmnet.fit$cvm[l1se_ind], " (", glmnet.fit$cvsd[l1se_ind], ")\n", sep="")
+    }
   }
   
   
@@ -997,11 +1077,14 @@ get_modmat <- function(
       }
     }
     if (is.matrix(conf_rules)) {
-      if (!sparse) {
+      #if (!sparse) {
         x <- cbind(x, conf_rules)
-      } else {
+        ## I believe both sparse and non-sparse matrices can use cbind:
+        ## Matrix::cBind returns:
+        ## .Defunct(msg = "'cBind' is defunct; 'base::cbind' handles S4 objects since R 3.2.0")
+      #} else {
         ## TODO: implement something for sparse matrices.
-      }
+      #}
     }
   }
   
@@ -1070,7 +1153,11 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
   
   ## Prepare glmtree arguments, if necessary:
   if (!use.grad && tree.unbiased) {
-    glmtree_args <- mob_control(maxdepth = maxdepth[1] + 1, mtry = mtry)
+    
+    ## TODO: Must evaluate tree.control!
+    glmtree_args <- tree.control
+    glmtree_args$maxdepth <- maxdepth[1] + 1
+    glmtree_args$mtry <- mtry
     glmtree_args$formula <- formula(paste(paste(y_names, " ~ 1 |"), 
                                           paste(x_names, collapse = "+")))
     if (!family == "gaussian") {
@@ -1080,22 +1167,27 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
     glmtree_args <- NULL
   }
 
-  ## Set up subsamples (outside of the loop):
-  subsample <- list()
-  
-  for (i in 1:ntrees) {
-    if (is.function(sampfrac)) {
-      subsample[[i]] <- sampfrac(n = n, weights = weights)
-    }
-    else if (sampfrac == 1) {
-      subsample[[i]] <- sample(1:n, size = n, replace = TRUE, 
-                               prob = weights)
-    }
-    else if (sampfrac < 1) {
-      subsample[[i]] <- sample(1:n, size = round(sampfrac * n), 
-                               replace = FALSE, prob = weights)
-    }
-  }  
+  ## Set up subsamples (outside of the loop!):
+  if (verbose) cat("\nGenerating random samples...")
+  subsample <- if (is.function(sampfrac)) {
+    replicate(n = ntrees, sampfrac(n = n, weights = weights))
+  } else if (sampfrac == 1) {
+    replicate(n = ntrees, sample(1:n, size = n, replace = TRUE, prob = weights))
+  } else if (sampfrac < 1) {
+    replicate(n = ntrees, sample(1:n, size = round(sampfrac * n), 
+           replace = FALSE, prob = weights))
+  }
+  if (is.list(subsample)) {
+    ## Add 0s to all samples that do not have maximum length (selecting row 0 return nothing)
+    ## and return a
+    max_length <- max(sapply(subsample, length))
+    subsample <- sapply(subsample, function(x) {
+      if (length(x) < max_length) {
+        x <- c(x, rep(0L, times = max_length - length(x)))
+      }
+      x})
+  }
+  if (verbose) cat(" Done!\n\n")
   
   ## Grow trees:
   if (learnrate == 0) {
@@ -1106,9 +1198,9 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
                                       glmtree_args = NULL, tree.control = NULL) {
       
       ## Make sure weights are found by tree-fitting functions.
-      ## Most fitting functions search for weights like function lm() does:
+      ## Most fitting functions search for weights like e.g. lm() does:
       ## weights, subset and offset are evaluated in the same way as variables in formula, 
-      ## that is first in data and then in the environment of formula
+      ## that is, first in data and then in the environment of formula
       environment(formula) <- environment()
       
       if (tree.unbiased) {
@@ -1151,8 +1243,8 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
             glmtree_args$maxdepth <- maxdepth[i] + 1L
           }
         }
-        fit_tree_return_rules(data = data[subsample[[i]], ], 
-                              weights = weights[subsample[[i]]],
+        fit_tree_return_rules(data = data[subsample[ , i], ], 
+                              weights = weights[subsample[ , i]],
                               formula = formula, 
                               family = family, 
                               use.grad = use.grad, 
@@ -1180,8 +1272,8 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
           }
         }
         rules <- c(rules, 
-                   fit_tree_return_rules(data = data[subsample[[i]], ], 
-                                         weights = weights[subsample[[i]]],
+                   fit_tree_return_rules(data = data[subsample[ , i], ], 
+                                         weights = weights[subsample[ , i]],
                                          formula = formula, 
                                          family = family, 
                                          use.grad = use.grad, 
@@ -1193,6 +1285,11 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
     }
   
   } else { # learnrate > 0:
+    
+    if (verbose) {
+      cat("Fitting trees\n")
+      prog_bar <- txtProgressBar(min = 1, max = ntrees, style = 3)
+    }
     
     rules <- c() # initialize with empty rule vector
     
@@ -1251,29 +1348,22 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
         data_with_y_learn$pseudo_y <- ngradient_CoxPH(y = y, f = eta, w = weights)
       }
       
-      if (verbose) {
-        cat("Fitting trees\n")
-        prog_bar <- txtProgressBar(min = 1, max = ntrees, style = 3)
-      }
-      
       for(i in 1L:ntrees) {
 
         if (verbose) setTxtProgressBar(prog_bar, i)
-          
-        if (length(maxdepth) > 1L) {
-          tree.control$maxdepth <- maxdepth[i]
-        }
+        if (length(maxdepth) > 1L) tree.control$maxdepth <- maxdepth[i]
+        
         ## Grow tree on subsample:
         if (tree.unbiased) {
           tree <- ctree(formula = formula, control = tree.control, 
-                        weights = weights[subsample[[i]]],
-                        data = data_with_y_learn[subsample[[i]], ])
+                        weights = weights[subsample[ , i]],
+                        data = data_with_y_learn[subsample[ , i], ])
           ## Collect rules:
           rules <- c(rules, list.rules(tree, removecomplements = removecomplements,
                                        singleconditions = singleconditions))
         } else {
-          tree <- rpart(formula, control = tree.control, weights = weights[subsample[[i]]],
-                        data = data_with_y_learn[subsample[[i]], ])
+          tree <- rpart(formula, control = tree.control, weights = weights[subsample[ , i]],
+                        data = data_with_y_learn[subsample[ , i], ])
           paths <- path.rpart(tree, nodes = rownames(tree$frame), print.it = FALSE, pretty = 0)
           paths <- unname(sapply(sapply(paths, `[`, index = -1), paste, collapse = " & ")[-1])
           if (removecomplements) {
@@ -1301,15 +1391,15 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
     } else { ## use.grad is FALSE, employ (g)lmtrees with offset:
       
       ## initialize with 0 offset:
-      ##offset <- rep(0, times = nrow(data))
       data$.offset <- rep(0, times = nrow(data))
       
       for(i in 1:ntrees) {
         
+        if (verbose) setTxtProgressBar(prog_bar, i)
+        
         # Take subsample of dataset:
-        glmtree_args$data <- data[subsample[[i]], ]
-        glmtree_args$weights <- weights[subsample[[i]]]
-        ##glmtree_args$offset <- offset[subsample[[i]]] 
+        glmtree_args$data <- data[subsample[ , i], ]
+        glmtree_args$weights <- weights[subsample[ , i]]
         glmtree_args$offset <- bquote(.offset)
         
         if (length(maxdepth) > 1L) {
@@ -1321,6 +1411,7 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
         } else {
           tree <- do.call(glmtree, args = glmtree_args) 
         }
+        
         # Collect rules:
         rules <- c(rules, list.rules(tree, removecomplements = removecomplements,
                                      singleconditions = singleconditions))
@@ -1328,12 +1419,10 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
         if (learnrate > 0) {
           if (family == "gaussian") {
             data$.offset <- data$.offset + learnrate * 
-              #suppressWarnings(
-              predict(tree, newdata = data)#)
+              predict(tree, newdata = data)
           } else {
             data$.offset <- data$.offset + learnrate * 
-              #suppressWarnings(
-              predict(tree, newdata = data, type = "link")#)
+              predict(tree, newdata = data, type = "link")
           }
         }
       }
@@ -1386,11 +1475,6 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
       return.dupl.compl = TRUE, sparse = sparse, 
       keep_rulevars = TRUE)
   
-    #complements.removed <- rules_obj$complements.removed
-    #duplicates.removed <- rules_obj$duplicates.removed
-    #rules <- rules_obj$rules
-    #rulevars <- rules_obj$rulevars
-  
     if (verbose && (removeduplicates || removecomplements)) 
       cat("\n\nA total of", length(rules_obj$duplicates.removed) + length(rules_obj$complements.removed), "generated rules were perfectly collinear with earlier rules and removed from the initial ensemble. \n(fit$duplicates.removed and fit$complements.removed show which, if any).")
     
@@ -1400,7 +1484,7 @@ pre_rules <- function(formula, data, weights = rep(1, nrow(data)),
   } else {
     warn <- "No prediction rules could be derived from dataset. " 
     if (tree.unbiased) {
-      warn <- paste0(warn, "Consider increasing the criterion for implementing splits and/or turning off the Bonferroni correction by specifying tree.control=")
+      warn <- paste0(warn, "Consider increasing the criterion for implementing splits and/or turning off the Bonferroni correction through specification of argument tree.control.")
       if (use.grad) {
         warn <- paste0(warn, "ctree_control(alpha = .5, testtype='Univariate'). ")
       } else {
@@ -1723,8 +1807,9 @@ summary.pre <- function(object, penalty.par.val = "lambda.1se",
   }
   
   cl <- match.call()
-
+    
   if (inherits(object$glmnet.fit, "cv.relaxed")) {
+    cl$gamma <- eval(cl$gamma)
     
     ## check if gamma value is specified, and if so whether it is a single, proper value
     if (!is.null(cl$gamma)) {
@@ -1737,6 +1822,8 @@ summary.pre <- function(object, penalty.par.val = "lambda.1se",
              ".")
       }
     }
+    
+    cl$penalty.par.val <- eval(cl$penalty.par.val)
         
     if (penalty.par.val == "lambda.1se") {
       lambda_ind <- object$glmnet.fit$relaxed$index["1se", 1]
@@ -1784,6 +1871,8 @@ summary.pre <- function(object, penalty.par.val = "lambda.1se",
         object$glmnet.fit$name, "\n\n", sep = "")
     
   } else { ## default, non-relaxed lasso was fitted
+    
+    cl$penalty.par.val <- eval(cl$penalty.par.val)
     
     if (!is.null(cl$gamma)) { 
       warning("A value for gamma was specified, but will be ignored because the rule ensemble was not fit using relax = TRUE")
@@ -2204,6 +2293,7 @@ predict.pre <- function(object, newdata = NULL, type = "link",
   }
   
   ## check if proper penalty.par.val argument is specified:
+  penalty.par.val <- eval(penalty.par.val)  
   if (!(length(penalty.par.val) == 1L)) {
     stop("Argument penalty.par.val should be a vector of length 1.")
   } else if (!(penalty.par.val%in% c("lambda.min", "lambda.1se")) && 
@@ -2214,6 +2304,7 @@ predict.pre <- function(object, newdata = NULL, type = "link",
   ## check if gamma value is specified, and if so whether it is a single value
   cl <- match.call()
   if (!is.null(cl$gamma)) {
+    cl$gamma <- eval(cl$gamma)
     if (!(length(cl$gamma) == 1L && cl$gamma >= 0 && cl$gamma <= 1)) {
       stop("Argument gamma has been supplied, but should be a single numeric value [0, 1].")
     }
@@ -2347,26 +2438,43 @@ predict.pre <- function(object, newdata = NULL, type = "link",
 #' should correspond to the variable as described in the model formula used
 #' to generate the ensemble (i.e., including functions applied to the variable).
 #' @inheritParams print.pre
+#' @param response numeric vector of length 1. Only relevant for multivariate gaussian 
+#' and multinomial responses. If \code{NULL} (default), PDPs for all response 
+#' variables or categories will be produced. A single integer can be specified, 
+#' indicating for which response variable or category PDPs should be produced.  
 #' @param nvals optional numeric vector of length one. For how many values of x
 #' should the partial dependence plot be created?
 #' @param type character string. Type of prediction to be plotted on y-axis.
 #' \code{type = "response"} gives fitted values for continuous outputs and
 #' fitted probabilities for nominal outputs. \code{type = "link"} gives fitted
 #' values for continuous outputs and linear predictor values for nominal outputs.
-#' @param ylab character. Label to be printed on the y-axis.
+#' @param ylab character. Label to be printed on the y-axis, defaults to the response
+#' variable name(s).
+#' @param xlab character. Label to be printed on the x-axis. If \code{NULL},
+#' the supplied \code{varname} will be printed on the x-axis.
+#' @param newdata Optional \code{data.frame} in which to look for variables 
+#' with which to predict. If \code{NULL} (the default), the \code{data.frame} used to fit the 
+#' original ensemble will be used. Smaller subsets of the original data can
+#' be specified to (substantially) reduce computation time. See Details.
 #' @param ... Further arguments to be passed to 
 #' \code{\link[graphics]{plot.default}}.
 #' @details By default, a partial dependence plot will be created for each unique
-#' observed value of the specified predictor variable. When the number of unique
-#' observed values is large, this may take a long time to compute. In that case,
-#' specifying the \code{nvals} argument can substantially reduce computing time. When the
+#' observed value of the specified predictor variable. See also section 8.1 of 
+#' Friedman & Popescu (2008).
+#' 
+#' When the number of unique observed values is large, partial dependence functions
+#' can take a very long time to compute. Specifying the \code{nvals} argument 
+#' can substantially reduce computation time. When the
 #' \code{nvals} argument is supplied, values for the minimum, maximum, and \code{(nvals - 2)}
 #' intermediate values of the predictor variable will be plotted. Note that \code{nvals}
 #' can be specified only for numeric and ordered input variables. If the plot is
 #' requested for a nominal input variable, the \code{nvals} argument will be
 #' ignored and a warning printed.
 #' 
-#' See also section 8.1 of Friedman & Popescu (2008).
+#' Alternatively, \code{newdata} can be specified to provide a different (smaller) 
+#' set of observations to compute partial dependence over.
+#' If \code{mi_pre} was used to derive the original rule ensemble, 
+#' function \code{mean_mi} can be used for this.
 #' 
 #' @references Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
 #' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
@@ -2374,27 +2482,40 @@ predict.pre <- function(object, newdata = NULL, type = "link",
 #' Milborrow, S. (2019). plotmo: Plot a model's residuals, response, and partial 
 #' dependence plots. \url{https://CRAN.R-project.org/package=plotmo}
 #' 
-#' @examples \donttest{set.seed(42)
+#' @examples \donttest{airq <- airquality[complete.cases(airquality), ]
+#' set.seed(42)
 #' airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),])
-#' singleplot(airq.ens, "Temp")}
+#' singleplot(airq.ens, "Temp")
+#' 
+#' ## For multinomial and mgaussian families, one PDP is created per category or outcome
+#' set.seed(42)
+#' airq.ens3 <- pre(Ozone + Wind ~ ., data = airq, family = "mgaussian")
+#' singleplot(airq.ens3, varname = "Day")
+#' 
+#' set.seed(42)
+#' iris.ens <- pre(Species ~ ., data = iris, family = "multinomial")
+#' singleplot(iris.ens, varname = "Petal.Width")}
 #' @seealso \code{\link{pre}}, \code{\link{pairplot}}
 #' @export
 singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
-                       nvals = NULL, type = "response", ylab = "predicted", 
-                       gamma = NULL, ...)
+                       nvals = NULL, type = "response", ylab = NULL, 
+                       response = NULL,
+                       gamma = NULL, newdata = NULL, xlab = NULL,  ...)
 {
  
-  ## Check family:
-  if (object$family %in% c("mgaussian", "multinomial")) {
-    stop("Function singleplot not implemented yet for multivariate and multinomial outcomes.")
+  ## Check if newdata supplied matches original data
+  if (!is.null(newdata)) {
+    if (!all(object$x_names %in% colnames(newdata))) {
+      stop("Newdata must contain all predictors used to fit original ensemble.")
+    }
   }
   
-  ## Check if proper object argument is specified: 
+  ## Check if proper object argument is specified
   if (!inherits(object, "pre")) {
     stop("Argument object should be an object of class 'pre'")
   }
   
-  ## Check if proper varname argument is specified: 
+  ## Check if proper varname argument is specified
   if (length(varname) != 1L || !is.character(varname)) {
     stop("Argument varname should be a character vector of length 1.")
   } else if (!(varname %in% object$x_names)) {
@@ -2406,7 +2527,7 @@ singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
     }
   }
   
-  ## Check if proper penalty.par.val argument is specified: 
+  ## Check if proper penalty.par.val argument is specified
   if (length(penalty.par.val) != 1L) {
     stop("Argument penalty.par.val should be a vector of length 1.")
   } else if (!( penalty.par.val %in% c("lambda.min", "lambda.1se") || 
@@ -2432,33 +2553,38 @@ singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
     }
   }
   
-  ## Check if proper nvals argument is specified: 
+  ## Check if proper nvals argument is specified
   if (!is.null(nvals)) {
     if (length(nvals) != 1L || nvals != as.integer(nvals)) {
       stop("Argument nvals should be an integer vector of length 1.")
     } else if (is.factor(object$data[ , varname]) && !is.null(nvals)) {
       warning("Plot is requested for variable of class factor. Value specified for
-              nvals will be ignored.", immediate. = TRUE)
+              nvals will be ignored, all factor levels will be used.", immediate. = TRUE)
       nvals <- NULL
     }
   }
   
-  ## Check if proper type argument is specified: 
+  ## Check if proper type argument is specified
   if (length(type) != 1L || !is.character(type)) {
     stop("Argument type should be a single character string.")
   }
   
-  # Generate expanded dataset:
+  ## Generate expanded dataset
+  if (is.null(newdata)) newdata <- object$data
   if (is.null(nvals)) {
-    newx <- unique(object$data[ , varname])
+    newx <- unique(newdata[ , varname])
   } else {
     newx <- seq(
-      min(object$data[ , varname]), max(object$data[ , varname]), length = nvals)
+      min(newdata[ , varname]), max(newdata[ , varname]), length = nvals)
   }
-  exp_dataset <- object$data[rep(row.names(object$data), times = length(newx)),]
-  exp_dataset[,varname] <- rep(newx, each = nrow(object$data))
+  exp_dataset <- if (is.null(newdata)) {
+    newdata[rep(row.names(newdata), times = length(newx)), ]
+  } else {
+    newdata[rep(row.names(newdata), times = length(newx)), ]
+  }
+  exp_dataset[ , varname] <- rep(newx, each = nrow(newdata))
   
-  # get predictions:
+  ## get predictions
   if (is.null(gamma)) {
     exp_dataset$predy <- predict.pre(object, newdata = exp_dataset, type = type,
                                     penalty.par.val = penalty.par.val)
@@ -2468,10 +2594,27 @@ singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
                                      gamma = gamma)
   }
   
-  # create plot:
-  plot(aggregate(
-    exp_dataset$predy, by = exp_dataset[varname], data = exp_dataset, FUN = mean),
-    type = "l", ylab = ylab, xlab = varname, ...)
+  ## create plot
+  if (object$family %in% c("multinomial", "mgaussian")) {
+    resp_names <- if (is.null(response)) {
+      colnames(exp_dataset$predy) 
+    } else {
+      colnames(exp_dataset$predy)[response]
+    }
+    for (resp_name in resp_names) {
+      y_lab <- ifelse(is.null(ylab), resp_name, ylab) 
+      plot(aggregate(
+        exp_dataset$predy[ , resp_name], by = exp_dataset[varname], 
+        data = exp_dataset, FUN = mean), type = "l", ylab = y_lab, 
+        xlab = if (is.null(xlab)) varname else xlab, ...)
+    }
+  } else {
+    y_lab <- ifelse(is.null(ylab), object$y_names, ylab) 
+    plot(aggregate(
+      exp_dataset$predy, by = exp_dataset[varname], data = exp_dataset, FUN = mean),
+      type = "l", ylab = y_lab, xlab = if (is.null(xlab)) varname else xlab, 
+      ...)
+  }
 }
 
 
@@ -2500,35 +2643,79 @@ singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
 #' a contour plot, \code{type = "both"} yields a heatmap plot with added contours,
 #' \code{type = "perspective"} yields a three dimensional plot.
 #' @param nvals optional numeric vector of length 2. For how many values of
-#' x1 and x2 should partial dependence be plotted? If \code{NULL}, all observed
-#' values for the two predictor variables specified will be used (see details).
+#' x1 and x2 should partial dependence be plotted? If \code{NULL}, a grid of all possible
+#' combinations of the observed values of the two predictor variables specified will be used 
+#' (see details).
+#' @param response numeric vector of length 1. Only relevant for multivariate gaussian 
+#' and multinomial responses. If \code{NULL} (default), PDPs for all response 
+#' variables or categories will be produced. A single integer can be specified, 
+#' indicating for which response variable or category PDPs should be produced.   
 #' @param pred.type character string. Type of prediction to be plotted on z-axis.
 #' \code{pred.type = "response"} gives fitted values for continuous outputs and
 #' fitted probabilities for nominal outputs. \code{pred.type = "link"} gives fitted
 #' values for continuous outputs and linear predictor values for nominal outputs.
+#' @param xlab character. Label to be printed on the x-axis. If \code{NULL},
+#' the first elements of the supplied \code{varnames} will be printed on the x-axis.
+#' @param ylab character. Label to be printed on the y-axis. If \code{NULL},
+#' the second element of the supplied \code{varnames} will be printed on the y-axis.
+#' @param newdata Optional \code{data.frame} in which to look for variables 
+#' with which to predict. If \code{NULL}, the \code{data.frame} used to fit the 
+#' original ensemble will be used.
+#' @param main Title for the plot. If \code{NULL}, the name of the response
+#' will be printed.
 #' @param ... Further arguments to be passed to \code{\link[graphics]{image}}, 
 #' \code{\link[graphics]{contour}} or \code{\link[graphics]{persp}} (depending on
 #' whether \code{type} is specified to be \code{"heatmap"}, \code{"contour"}, \code{"both"} 
 #' or \code{"perspective"}).
-#' @details By default, partial dependence will be plotted for each combination
+#' 
+#' @details 
+#' Partial dependence functions are described in section 8.1 of Friedman & 
+#' Popescu (2008).
+#' 
+#' By default, partial dependence will be plotted for each combination
 #' of 20 values of the specified predictor variables. When \code{nvals = NULL} is
-#' specified a dependence plot will be created for every combination of the unique
-#' observed values of the two predictor variables specified. Therefore, using
-#' \code{nvals = NULL} will often result in long computation times, and / or
-#' memory allocation errors. Also, \code{\link{pre}} ensembles derived
-#' from training datasets that are very wide or long may result in long
-#' computation times and / or memory allocation errors. In such cases, reducing
-#' the values supplied to \code{nvals} will reduce computation time and / or
-#' memory allocation errors. When the nvals argument is supplied, values for the
+#' specified, a dependence plot will be created for every combination of the unique
+#' observed values of the two specified predictor variables. If \code{NA} instead of
+#' a numeric value is specified for one of the predictor variables, all observed
+#' values for that variables will be used. Specifying \code{nvals = NULL} and 
+#' \code{nvals = c(NA, NA)} will yield the exact same result.
+#' 
+#' High values, \code{NA} or \code{NULL} for \code{nvals} result in long 
+#' computation times and possibly memory problems. Also, \code{\link{pre}} 
+#' ensembles derived from training datasets that are very wide or long may 
+#' result in long computation times and/or memory allocation errors. 
+#' In such cases, reducing
+#' the values supplied to \code{nvals} will reduce computation time and/or
+#' memory allocation errors. 
+#' 
+#' When numeric value(s) are specified for \code{nvals}, values for the
 #' minimum, maximum, and nvals - 2 intermediate values of the predictor variable
-#' will be plotted. Furthermore, if none of the variables specified appears in
-#' the final prediction rule ensemble, an error will occur.
+#' will be plotted. 
 #' 
-#' See also section 8.1 of Friedman & Popescu (2008).
+#' Alternatively, \code{newdata} can be specified to provide a different (smaller) 
+#' set of observations to compute partial dependence over.
+#' If \code{mi_pre} was used to derive the original rule ensemble, 
+#' \code{newdata = "mean.mi"} can be specified. This 
+#' will result in an average dataset being computed over the imputed datasets, 
+#' which are then used to compute partial dependence functions. This greatly 
+#' reduces the number of observations and thereby computation time.
 #' 
-#' @examples \donttest{set.seed(42)
-#' airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),])
-#' pairplot(airq.ens, c("Temp", "Wind"))}
+#' If none of the variables specified with argument \code{varnames} was
+#' selected for the final prediction rule ensemble, an error will be returned.
+#' 
+#' @examples \donttest{airq <- airquality[complete.cases(airquality),]
+#' set.seed(42)
+#' airq.ens <- pre(Ozone ~ ., data = airq)
+#' pairplot(airq.ens, c("Temp", "Wind"))
+#' 
+#' ## For multinomial and mgaussian families, one PDP is created per category or outcome
+#' set.seed(42)
+#' airq.ens3 <- pre(Ozone + Wind ~ ., data = airq, family = "mgaussian")
+#' pairplot(airq.ens3, varnames = c("Day", "Month"))
+#' 
+#' set.seed(42)
+#' iris.ens <- pre(Species ~ ., data = iris, family = "multinomial")
+#' pairplot(iris.ens, varname = c("Petal.Width", "Petal.Length"))}
 #' @export
 #' @references Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 
 #' via rule ensembles. \emph{The Annals of Applied Statistics, 2}(3), 916-954.
@@ -2539,21 +2726,29 @@ singleplot <- function(object, varname, penalty.par.val = "lambda.1se",
 #' @seealso \code{\link{pre}}, \code{\link{singleplot}} 
 #' @export
 pairplot <- function(object, varnames, type = "both", gamma = NULL,
-                     penalty.par.val = "lambda.1se", 
-                     nvals = c(20L, 20L), pred.type = "response", ...)
-{
+                     penalty.par.val = "lambda.1se", response = NULL,
+                     nvals = c(20L, 20L), pred.type = "response", 
+                     newdata = NULL, xlab = NULL, ylab = NULL, main = NULL,
+                     ...) {
   
-  ## Check if proper object argument is specified: 
+  ## check if package interp is installed
+  if (!(requireNamespace("interp"))) {
+    stop("Function pairplot requires package interp, install package interp first.")
+  }
+  
+  ## Check if proper object argument is specified
   if (!inherits(object, "pre")) {
     stop("Argument object should be an object of class 'pre'")
   }
   
-  ## Check family:
-  if (object$family %in% c("mgaussian", "multinomial")) {
-    stop("Function pairplot not implemented yet for multivariate and multinomial outcomes.")
+  ## Check if newdata supplied matches original data
+  if (!is.null(newdata)) {
+    if (!all(object$x_names %in% colnames(newdata))) {
+      stop("Newdata must contain all predictors used to fit original ensemble.")
+    }
   }
-  
-  ## Check if proper varnames argument is specified: 
+
+  ## Check if proper varnames argument is specified
   if (length(varnames) != 2L || !is.character(varnames)) {
     stop("Argument varnames should be a character vector of length 2.")
   } else if (!(all(varnames %in% object$x_names))) {
@@ -2568,7 +2763,7 @@ pairplot <- function(object, varnames, type = "both", gamma = NULL,
     stop("3D partial dependence plots are currently not supported for factors.")
   }
   
-  ## Check if proper penalty.par.val argument is specified: 
+  ## Check if proper penalty.par.val argument is specified
   if (!(length(penalty.par.val) == 1)) {
     stop("Argument penalty.par.val should be a vector of length 1.")
   } else if (!(penalty.par.val %in% c("lambda.min", "lambda.1se") || 
@@ -2594,46 +2789,61 @@ pairplot <- function(object, varnames, type = "both", gamma = NULL,
     }
   }
   
-  ## Check if proper nvals argument is specified: 
-  if (!(length(nvals) == 2 && all(nvals == as.integer(nvals)))) {
-    stop("Argument nvals should be an integer vector of length 2.")
+  ## Check if proper nvals argument is specified 
+  if (is.null(nvals)) nvals <- c(NA, NA)
+  
+  if (!any(is.na(nvals))) {
+    if (!(length(nvals) == 2 && all(nvals == as.integer(nvals)))) {
+      stop("Argument nvals should be an integer vector of length 2.")
+    }
+    if (length(unique(object$data[ , varnames[1]])) < nvals[1] ||
+        length(unique(object$data[ , varnames[2]])) < nvals[2]) {
+      uniq1 <- unique(object$data[ , varnames[1]])
+      uniq2 <- unique(object$data[ , varnames[2]])
+      warning(paste0("The nvals argument specified more values than the number of observed unique values of ",
+                     varnames[1], " and/or ", varnames[2], 
+                     ". Specifying nvals=NULL, or NA for one of the predictors may reduce computation time. "))
+    }
   }
   
-  ## Check if proper type argument is specified: 
+  ## Check if proper type argument is specified
   if (!(length(type) == 1 && is.character(type))) {
     stop("Argument type should be equal to 'heatmap', 'contour', 'both' or 'perspective'.")
   }
   
-  ## Check if proper pred.type argument is specified: 
+  ## Check if proper pred.type argument is specified
   if (!(length(type) == 1 && is.character(type))) {
     stop("Argument type should be a single character string.")
   }
   
-  ## check if package interp is installed:
-  if (!(requireNamespace("interp"))) {
-    stop("Function pairplot requires package interp.")
-  }
-
-
-  # generate expanded dataset:
-  if (is.null(nvals)){
-    newx1 <- unique(object$data[ , varnames[1]])
-    newx2 <- unique(object$data[ , varnames[2]])
+  ## generate expanded dataset
+  if (is.null(newdata)) newdata <- object$data
+  if (is.null(nvals)) {
+    newx1 <- sort(unique(newdata[ , varnames[1]]))
+    newx2 <- sort(unique(newdata[ , varnames[2]]))
   } else {
-    newx1 <- seq(min(object$data[ , varnames[1]]), max(object$data[ , varnames[1]]),
-                 length = nvals[1])
-    newx2 <- seq(min(object$data[ , varnames[2]]), max(object$data[ , varnames[2]]),
-                 length = nvals[2])
+    newx1 <- if(is.na(nvals)[1]) {
+      sort(unique(unique(newdata[ , varnames[1]])))
+    } else {
+      seq(min(newdata[ , varnames[1]]), max(newdata[ , varnames[1]]),
+          length = nvals[1])
+    }
+    newx2 <- if(is.na(nvals)[2]) {
+      sort(unique(unique(newdata[ , varnames[2]])))
+    } else {
+      seq(min(newdata[ , varnames[2]]), max(newdata[ , varnames[2]]),
+          length = nvals[2])
+    }
   }
   nobs1 <- length(newx1)
   nobs2 <- length(newx2)
   nobs <- nobs1*nobs2
-  exp_dataset <- object$data[rep(row.names(object$data), times = nobs),]
-  exp_dataset[,varnames[1]] <- rep(newx1, each = nrow(object$data)*nobs2)
-  exp_dataset[,varnames[2]] <- rep(rep(newx2, each = nrow(object$data)),
+  exp_dataset <- newdata[rep(row.names(newdata), times = nobs), ]
+  exp_dataset[ , varnames[1]] <- rep(newx1, each = nrow(newdata)*nobs2)
+  exp_dataset[ , varnames[2]] <- rep(rep(newx2, each = nrow(newdata)),
                                    times = nobs1)
   
-  # get predictions:
+  ## compute predictions
   if (is.null(gamma)) {
     pred_vals <- predict.pre(object, newdata = exp_dataset, type = pred.type,
                             penalty.par.val = penalty.par.val)
@@ -2642,32 +2852,74 @@ pairplot <- function(object, varnames, type = "both", gamma = NULL,
                              penalty.par.val = penalty.par.val, gamma = gamma)
   }
   
-  # create plot:
-  if (is.null(nvals)) {nvals <- 3}
-  xyz <- interp::interp(exp_dataset[,varnames[1]], exp_dataset[,varnames[2]],
-                       pred_vals, duplicate = "mean")
-  if (type == "heatmap" || type == "both") {
-    if (is.null(match.call()$col)) {
-      colors <- rev(c("#D33F6A", "#D95260", "#DE6355", "#E27449", "#E6833D", 
-               "#E89331", "#E9A229", "#EAB12A", "#E9C037", "#E7CE4C", 
-               "#E4DC68", "#E2E6BD"))
-      image(xyz, xlab = varnames[1], ylab = varnames[2], 
-            col = colors, ...)
+  ## create plot
+  if (object$family %in% c("mgaussian", "multinomial")) {
+    resp_names <- if (is.null(response)) {
+      colnames(pred_vals) 
     } else {
-      image(xyz, xlab = varnames[1], ylab = varnames[2], ...)
+      colnames(pred_vals)[response]
     }
-    if (type == "both") {
-      contour(xyz, add = TRUE)
+    for (resp_name in resp_names) {
+      main <- ifelse(is.null(main), resp_name, main)
+      xyz <- interp::interp(exp_dataset[ , varnames[1]], exp_dataset[ , varnames[2]],
+                            pred_vals[, resp_name], duplicate = "mean")
+      if (type == "heatmap" || type == "both") {
+        if (is.null(match.call()$col)) {
+          colors <- rev(c("#D33F6A", "#D95260", "#DE6355", "#E27449", "#E6833D", 
+                          "#E89331", "#E9A229", "#EAB12A", "#E9C037", "#E7CE4C", 
+                          "#E4DC68", "#E2E6BD"))
+          image(xyz, xlab = if (is.null(xlab)) varnames[1] else xlab, 
+                ylab = if (is.null(ylab)) varnames[2] else ylab, 
+                col = colors, main = main, ...)
+        } else {
+          image(xyz, xlab = if (is.null(xlab)) varnames[1] else xlab, 
+                ylab = if (is.null(ylab)) varnames[2] else ylab, main = main, ...)
+        }
+        if (type == "both") {
+          contour(xyz, add = TRUE)
+        }
+      }
+      if (type == "contour") {
+        contour(xyz, xlab = if (is.null(xlab)) varnames[1] else xlab, 
+                ylab = if (is.null(ylab)) varnames[2] else ylab, main = main, ...) 
+      }
+      if (type == "perspective") {
+        persp(xyz, xlab = if (is.null(xlab)) varnames[1] else xlab, 
+              ylab = if (is.null(ylab)) varnames[2] else ylab, zlab = "predicted y", 
+              main = main, ...)
+      }
     }
-  }
-  if (type == "contour") {
-    contour(xyz, xlab = varnames[1], ylab = varnames[2], ...) 
-  }
-  if (type == "perspective") {
-    persp(xyz, xlab = varnames[1], ylab = varnames[2], zlab = "predicted y", ...)
+  } else { ## family is not multinomial or mgaussian
+    xyz <- interp::interp(exp_dataset[ , varnames[1]], exp_dataset[ , varnames[2]],
+                          pred_vals, duplicate = "mean")
+    main <- ifelse(is.null(main), object$y_names, main)
+    if (type == "heatmap" || type == "both") {
+      if (is.null(match.call()$col)) {
+        colors <- rev(c("#D33F6A", "#D95260", "#DE6355", "#E27449", "#E6833D", 
+                        "#E89331", "#E9A229", "#EAB12A", "#E9C037", "#E7CE4C", 
+                        "#E4DC68", "#E2E6BD"))
+        image(xyz, xlab = if (is.null(xlab)) varnames[1] else xlab, 
+              ylab = if (is.null(ylab)) varnames[2] else ylab, 
+              col = colors, main = main, ...)
+      } else {
+        image(xyz, xlab = if (is.null(xlab)) varnames[1] else xlab, 
+              ylab = if (is.null(ylab)) varnames[2] else ylab, main = main, ...)
+      }
+      if (type == "both") {
+        contour(xyz, add = TRUE)
+      }
+    }
+    if (type == "contour") {
+      contour(xyz, xlab = if (is.null(xlab)) varnames[1] else xlab, 
+              ylab = if (is.null(ylab)) varnames[2] else ylab, main = main, ...) 
+    }
+    if (type == "perspective") {
+      persp(xyz, xlab = if (is.null(xlab)) varnames[1] else xlab, 
+            ylab = if (is.null(ylab)) varnames[2] else ylab, zlab = "predicted y",
+            main = main, ...)
+    }
   }
 }
-
 
 
 
@@ -2939,22 +3191,22 @@ importance.pre <- function(x, standardize = FALSE, global = TRUE,
           }
         }
       }
+  
+      ## Get imps for factors
+      if (is.factor(x$data[ , varimps$varname[i]])) { # check if variable is a factor and add importance
+          # !is.ordered(x$data[ , varimps$varname[i]])) {
+        ## Sum baseimps$imp for which baseimps$rule has varimps$varname[i] as _part_ of its name
+        if (x$family %in% c("mgaussian", "multinomial")) {
+          varimps[i, gsub("coefficient", "importance", coef_inds)] <-
+            varimps[i, gsub("coefficient", "importance", coef_inds)] +
+            colSums(baseimps[grepl(varimps$varname[i], baseimps$rule, fixed = TRUE), 
+                             gsub("coefficient", "importance", coef_inds)])
+        } else { # otherwise, simply add importance(s)
+          varimps$imp[i] <- varimps$imp[i] + 
+            sum(baseimps$imp[grepl(varimps$varname[i], baseimps$rule, fixed = TRUE)])
+        }
+      } 
     }
-      
-    ## Get imps for factors
-    if (is.factor(x$data[ , varimps$varname[i]])) { # check if variable is a factor and add importance
-        # !is.ordered(x$data[ , varimps$varname[i]])) {
-      ## Sum baseimps$imp for which baseimps$rule has varimps$varname[i] as _part_ of its name
-      if (x$family %in% c("mgaussian", "multinomial")) {
-        varimps[i, gsub("coefficient", "importance", coef_inds)] <-
-          varimps[i, gsub("coefficient", "importance", coef_inds)] +
-          colSums(baseimps[grepl(varimps$varname[i], baseimps$rule, fixed = TRUE), 
-                           gsub("coefficient", "importance", coef_inds)])
-      } else { # otherwise, simply add importance(s)
-        varimps$imp[i] <- varimps$imp[i] + 
-          sum(baseimps$imp[grepl(varimps$varname[i], baseimps$rule, fixed = TRUE)])
-      }
-    } 
     
     
     ## Step 3: Return (and plot) importances:
@@ -3028,7 +3280,7 @@ importance.pre <- function(x, standardize = FALSE, global = TRUE,
             plotnames <- abbreviate(plotnames, minlength = abbreviate)
           }
           barplot(height = varimps$imp, names.arg = plotnames, ylab = ylab,
-                main = main, ...)
+                main = main, cex.axis = cex.axis, ...)
         }
       }
     }
@@ -3789,7 +4041,7 @@ plot.pre <- function(x, penalty.par.val = "lambda.1se", gamma = NULL,
 
 
 ## Internal function for creating legend for corplot:
-image.scale <- function(z, col, breaks, axis.pos = 4, add.axis = TRUE) {
+image_scale <- function(z, col, breaks, axis.pos = 4, add.axis = TRUE) {
   poly <- vector(mode = "list", length(col))
   for(i in seq(poly)) {
     poly[[i]] <- c(breaks[i], breaks[i+1], breaks[i+1], breaks[i])
@@ -3918,7 +4170,7 @@ corplot <- function(object, penalty.par.val = "lambda.1se", colors = NULL,
   ## plot legend:
   par(fig = fig.legend, new = TRUE)
   col_inds <- round(seq(1, length(colors), length.out = length(legend.breaks)-1))
-  image.scale(z = legend.breaks,
+  image_scale(z = legend.breaks,
               col = colors[col_inds],
               axis.pos = 4,
               breaks = legend.breaks)
@@ -4356,15 +4608,15 @@ explain <- function(object, newdata, penalty.par.val = "lambda.1se",
 #' samp_func <- rare_level_sampler(c("Species", "factor2"), data = dat, 
 #'                                   sampfrac = .51, warning = TRUE)
 #' 
-#' ## Illustrate behavior of sampling function                                                                   
+#' ## Illustrate what it does                                                                   
 #' N <- nrow(dat)
 #' wts <- rep(1, times = nrow(dat))
 #' set.seed(3)
 #' dat[samp_func(n = N, weights = wts), ] # single sample
 #' for (i in 1:500) dat[samp_func(n = N, weights = wts), ]
-#' warnings() # to illustrates warnings that may occur when fitting a full PRE
+#' warnings() # to illustrate warnings that may occur when fitting a full PRE
 #' 
-#' ## Illustrate use of function generator with function pre:
+#' ## Illustrate use with function pre:
 #' ## (Note: low ntrees value merely to reduce computation time for the example)
 #' set.seed(42)
 #' # iris.ens <- pre(Petal.Width ~ . , data = dat, ntrees = 20) # would yield error
@@ -4402,3 +4654,101 @@ rare_level_sampler <- function(factors, data, sampfrac = .5, warning = FALSE) {
   }
   ret
 }
+
+
+
+#' Get the optimal lambda and gamma parameter values for an ensemble of given size
+#'
+#' Function \code{prune_pre} returns the optimal values of lambda and gamma for
+#' the requested ensemble size.
+#' 
+#' @param object an object of class \code{\link{pre}} that was fit using the relaxed lasso.
+#' If an object of class \code{\link{pre}} is specified that was not fit using the relaxed lasso,
+#' an error will be printed.
+#' @param nonzero maximum number of terms to retain.
+#' @param plusminus number of terms above and below \code{nonzero} for which CV results will be printed.
+#' 
+#' @return The lambda and gamma values that yield optimal predictive accuracy for the specified
+#' number of terms. These are invisibly returned, see Examples on how to use them. A sentence
+#' describing what the optimal values are is printed to the command line, with an overview of
+#' the performance (in terms of cross-validated accuracy and the number of terms retained) of 
+#' lambda values near the optimum. If the specified number of terms to retain is lower than
+#' what would be obtained using the \code{lambda.min} or \code{lambda.1se} criterion, a warning
+#' will also be printed.
+#' @examples \donttest{
+#' ## Fit a rule ensemble to predict Ozone concentration
+#' airq <- airquality[complete.cases(airquality), ]
+#' set.seed(42)
+#' airq.ens <- pre(Ozone ~ ., data = airq, relax = TRUE)
+#' 
+#' ## Inspect the result (default lambda.1se criterion)
+#' airq.ens
+#' 
+#' ## Inspect the lambda path 
+#' ## (lower x-axis gives lambda values, upper x-axis corresponding no. of non-zero terms)
+#' \dontrun{plot(airq.ens$glmnet.fit)}
+#' 
+#' ## Accuracy still quite good with only 5 terms, obtain corresponding parameter values
+#' opt_pars <- prune_pre(airq.ens, nonzero = 5)
+#' opt_pars
+#' 
+#' ## Use the parameter values for interpretation and prediction, e.g.
+#' predict(airq.ens, newdat = airq[c(22, 33), ], penalty = opt_pars$lambda, gamma = opt_pars$gamma)
+#' summary(airq.ens, penalty = opt_pars$lambda, gamma = opt_pars$gamma)
+#' print(airq.ens, penalty = opt_pars$lambda, gamma = opt_pars$gamma)
+#' }
+#' @seealso \code{\link{pre}}
+#' @export
+prune_pre <- function(object, nonzero, plusminus = 3) {
+  
+  ## Check if nonzero occurs in lambda path, otherwise warn and take nearest number
+  if (!nonzero %in% object$glmnet.fit$nzero) {
+    nonzero <- object$glmnet.fit$nzero[names(which.min((nonzero - object$glmnet.fit$nzero)^2))[1L]]
+    warning(paste0("Specified value of nonzero argument (", nonzero, ") does not occur on the lambda path. Results are returned for", nonzero, "non-zero terms, instead."), 
+            immediate. = TRUE)
+  }
+  
+  ## For relaxed lasso
+  if (!is.null(object$call$relax) && object$call$relax) {
+    
+    ## warn if non-optimal sparsity and accuracy are requested
+    if (object$glmnet.fit$relaxed$nzero.1se < nonzero) {
+      warning("The requested number of non-zero terms (", nonzero, ") is larger than the ", object$glmnet.fit$relaxed$nzero.1se, 
+              " non-zero terms retained with the lambda.1se criterion. Both complexity and cross-validated error will likely be lower (better) when using the lambda.1se criterion!", 
+              immediate. = TRUE)
+    }
+    if (object$glmnet.fit$relaxed$nzero.min < nonzero) {
+      warning("The requested number of non-zero terms (", nonzero, ") is larger than the ", object$glmnet.fit$relaxed$nzero.min, 
+              " non-zero terms retained with the lambda.min criterion. Both complexity and cross-validated error will likely be lower (better) using the default lambda.min criterion!", 
+              immediate. = TRUE)
+    } 
+    ## Get optimal lambda and gamma values for requested number of nonzero terms
+    gammas <- names(object$glmnet.fit$relaxed$statlist)
+    optimal_gammas <- gammas[apply(sapply(gammas, function(x) object$glmnet.fit$relaxed$statlist[[x]]$cvm), 1L, which.min)]
+    df <- data.frame(lambda = object$glmnet.fit$lambda,
+                     number_of_nonzero_terms = object$glmnet.fit$nzero,
+                     optimal_gamma = optimal_gammas,
+                     mean_cv_error = NA)
+    svals <- as.numeric(substring(rownames(df)[df$number_of_nonzero_terms == nonzero], first = 2))
+    svals <- (min(svals) - plusminus):(max(svals) + plusminus)
+    svals <- paste0("s", svals[svals %in% 0:(nrow(df)+1)])
+    df <- df[svals, ]
+    for (i in rownames(df)) {
+      df[i, "mean_cv_error"] <- data.frame(object$glmnet.fit$relaxed$statlist[[df[i, "optimal_gamma"]]])[i, "cvm"]
+    }
+    df$optimal_gamma <- substring(df$optimal_gamma, first = 3)
+    min_cvm <- which.min(df$mean_cv_error[df$number_of_nonzero_terms == nonzero])
+    lambda <- df$lambda[df$number_of_nonzero_terms == nonzero][min_cvm]
+    gamma <- as.numeric(df$optimal_gamma[df$number_of_nonzero_terms == nonzero][min_cvm])
+    cat(paste0("The best ensemble with ", nonzero, " non-zero terms is obtained with a lambda value of ", 
+               round(lambda, digits= 6), " and a gamma value of ", gamma, ".\n\n"))
+    cat(paste0("Overview of performance of ensembles selected with the nearest lambda values:\n"))
+    print(df)
+    invisible(list(lambda = lambda, gamma = gamma))
+  } else { ## For non-relaxed lasso
+    stop("For obtaining an ensemble with a pre-specified number of non-zero terms, use of the relaxed lasso is strongly recommended. The specified ensemble was fit using standard lasso. Please refit the original ensemble using function pre() and additionally specifying relax = TRUE.")
+  }
+}
+
+
+

@@ -1,4 +1,4 @@
-## ---- results='hide', message=FALSE, warning=FALSE, fig.width=5---------------
+## ----results='hide', message=FALSE, warning=FALSE, fig.width=5----------------
 head(airquality)
 nrow(airquality)
 library("mice")
@@ -18,15 +18,26 @@ set.seed(43)
 airq.ens.imp0 <- pre(Wind ~., data = imp0)
 airq.ens.imp0
 
-## ---- results='hide', message=FALSE, warning=FALSE, fig.width=7---------------
+## ----message=FALSE, warning=FALSE, fig.width=7--------------------------------
 set.seed(42)
-imp <- mice(airquality, m = 5)
+imp <- mice(airquality, m = 5, printFlag = FALSE)
 
 ## -----------------------------------------------------------------------------
 imp1 <- complete(imp, action = "all", include = FALSE)
 
 ## -----------------------------------------------------------------------------
-library("pre")
+set.seed(42)
+airq.ens.sta <- mi_pre(Wind ~ . , data = imp1)
+
+## ----fig.width=4, fig.height=7------------------------------------------------
+summary(airq.ens.sta)
+coefs <- coef(airq.ens.sta)
+coefs[coefs$coefficient != 0, ]
+
+## -----------------------------------------------------------------------------
+newdata <- mi_mean(imp1)
+singleplot(airq.ens.sta, newdata = newdata, varname = "Ozone")
+pairplot(airq.ens.sta, newdata = newdata, varnames = c("Ozone", "Solar.R"))
 
 ## -----------------------------------------------------------------------------
 pre.agg <- function(datasets, ...) {
@@ -41,7 +52,7 @@ pre.agg <- function(datasets, ...) {
 set.seed(43)
 airq.agg <- pre.agg(imp1, formula = Wind ~ .)
 
-## ---- results ='hide'---------------------------------------------------------
+## ----results ='hide'----------------------------------------------------------
 print.agg <- function(object, ...) {
   result <- list()
   sink("NULL")
@@ -84,7 +95,7 @@ coef.agg <- function(object, ...) {
       coefs$coefficient[first_match] + coefs$coefficient[i]
   }
   ## Remove duplicates:
-  coefs <- coefs[-duplicates, ]
+  if (length(duplicates) > 0) coefs <- coefs[-duplicates, ]
   ## Check if there are- duplicate linear terms left and repeat:
   duplicates <- which(duplicated(coefs$rule))
   for (i in duplicates) {
@@ -92,13 +103,13 @@ coef.agg <- function(object, ...) {
     coefs$coefficient[first_match] <- 
       coefs$coefficient[first_match] + coefs$coefficient[i]
   }
-  coefs <- coefs[-duplicates, ]
+  if (length(duplicates) > 0) coefs <- coefs[-duplicates, ]
   ## Return results:
   coefs
 }
 coef.agg(airq.agg)
 
-## ---- eval=FALSE, results='hide', message = FALSE, warning = FALSE------------
+## ----eval=FALSE, results='hide', message = FALSE, warning = FALSE-------------
 #  k <- 10
 #  set.seed(43)
 #  fold_ids <- sample(1:k, size = nrow(airquality), replace = TRUE)
@@ -155,25 +166,25 @@ coef.agg(airq.agg)
 #  
 #  }
 
-## ---- echo=FALSE, eval=FALSE--------------------------------------------------
+## ----echo=FALSE, eval=FALSE---------------------------------------------------
 #  save(preds, nterms, file = "Missing_data_results.Rda")
 
-## ---- echo=FALSE--------------------------------------------------------------
+## ----echo=FALSE---------------------------------------------------------------
 load("Missing_data_results.Rda")
 
-## ---- fig.width=5, fig.height=5-----------------------------------------------
+## ----fig.width=5, fig.height=5------------------------------------------------
 sapply(preds, function(x) mean((preds$observed - x)^2)) ## MSE
 sapply(preds, function(x) sd((preds$observed - x)^2)/sqrt(nrow(preds))) ## SE of MSE
 var(preds$observed) ## benchmark: Predict mean for all
 
-## ---- fig.width=4, fig.height=4-----------------------------------------------
+## ----fig.width=4, fig.height=4------------------------------------------------
 boxplot(nterms, main = "Number of selected terms \nper missing-data method",
         cex.main = .8)
 
 ## -----------------------------------------------------------------------------
 sessionInfo()
 
-## ---- echo = FALSE------------------------------------------------------------
+## ----echo = FALSE-------------------------------------------------------------
 # Austin et al. (2019) refer to Wood et al. (2008) for stacking with multiply imputed data:
 # 
 # "Stacked Imputed Datasets With Weighted Regressions (W1, W2, and W3)

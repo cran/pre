@@ -11,8 +11,11 @@ singleplot(
   penalty.par.val = "lambda.1se",
   nvals = NULL,
   type = "response",
-  ylab = "predicted",
+  ylab = NULL,
+  response = NULL,
   gamma = NULL,
+  newdata = NULL,
+  xlab = NULL,
   ...
 )
 }
@@ -42,10 +45,24 @@ should the partial dependence plot be created?}
 fitted probabilities for nominal outputs. \code{type = "link"} gives fitted
 values for continuous outputs and linear predictor values for nominal outputs.}
 
-\item{ylab}{character. Label to be printed on the y-axis.}
+\item{ylab}{character. Label to be printed on the y-axis, defaults to the response
+variable name(s).}
+
+\item{response}{numeric vector of length 1. Only relevant for multivariate gaussian 
+and multinomial responses. If \code{NULL} (default), PDPs for all response 
+variables or categories will be produced. A single integer can be specified, 
+indicating for which response variable or category PDPs should be produced.}
 
 \item{gamma}{Mixing parameter for relaxed fits. See
 \code{\link[glmnet]{coef.cv.glmnet}}.}
+
+\item{newdata}{Optional \code{data.frame} in which to look for variables 
+with which to predict. If \code{NULL} (the default), the \code{data.frame} used to fit the 
+original ensemble will be used. Smaller subsets of the original data can
+be specified to (substantially) reduce computation time. See Details.}
+
+\item{xlab}{character. Label to be printed on the x-axis. If \code{NULL},
+the supplied \code{varname} will be printed on the x-axis.}
 
 \item{...}{Further arguments to be passed to 
 \code{\link[graphics]{plot.default}}.}
@@ -60,21 +77,37 @@ for plotting partial dependence and also supports `pre` models.
 }
 \details{
 By default, a partial dependence plot will be created for each unique
-observed value of the specified predictor variable. When the number of unique
-observed values is large, this may take a long time to compute. In that case,
-specifying the \code{nvals} argument can substantially reduce computing time. When the
+observed value of the specified predictor variable. See also section 8.1 of 
+Friedman & Popescu (2008).
+
+When the number of unique observed values is large, partial dependence functions
+can take a very long time to compute. Specifying the \code{nvals} argument 
+can substantially reduce computation time. When the
 \code{nvals} argument is supplied, values for the minimum, maximum, and \code{(nvals - 2)}
 intermediate values of the predictor variable will be plotted. Note that \code{nvals}
 can be specified only for numeric and ordered input variables. If the plot is
 requested for a nominal input variable, the \code{nvals} argument will be
 ignored and a warning printed.
 
-See also section 8.1 of Friedman & Popescu (2008).
+Alternatively, \code{newdata} can be specified to provide a different (smaller) 
+set of observations to compute partial dependence over.
+If \code{mi_pre} was used to derive the original rule ensemble, 
+function \code{mean_mi} can be used for this.
 }
 \examples{
-\donttest{set.seed(42)
+\donttest{airq <- airquality[complete.cases(airquality), ]
+set.seed(42)
 airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),])
-singleplot(airq.ens, "Temp")}
+singleplot(airq.ens, "Temp")
+
+## For multinomial and mgaussian families, one PDP is created per category or outcome
+set.seed(42)
+airq.ens3 <- pre(Ozone + Wind ~ ., data = airq, family = "mgaussian")
+singleplot(airq.ens3, varname = "Day")
+
+set.seed(42)
+iris.ens <- pre(Species ~ ., data = iris, family = "multinomial")
+singleplot(iris.ens, varname = "Petal.Width")}
 }
 \references{
 Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 

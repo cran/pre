@@ -11,8 +11,13 @@ pairplot(
   type = "both",
   gamma = NULL,
   penalty.par.val = "lambda.1se",
+  response = NULL,
   nvals = c(20L, 20L),
   pred.type = "response",
+  newdata = NULL,
+  xlab = NULL,
+  ylab = NULL,
+  main = NULL,
   ...
 )
 }
@@ -41,14 +46,33 @@ specified, with higher values yielding a sparser ensemble. To evaluate the
 trade-off between accuracy and sparsity of the final ensemble, inspect
 \code{pre_object$glmnet.fit} and \code{plot(pre_object$glmnet.fit)}.}
 
+\item{response}{numeric vector of length 1. Only relevant for multivariate gaussian 
+and multinomial responses. If \code{NULL} (default), PDPs for all response 
+variables or categories will be produced. A single integer can be specified, 
+indicating for which response variable or category PDPs should be produced.}
+
 \item{nvals}{optional numeric vector of length 2. For how many values of
-x1 and x2 should partial dependence be plotted? If \code{NULL}, all observed
-values for the two predictor variables specified will be used (see details).}
+x1 and x2 should partial dependence be plotted? If \code{NULL}, a grid of all possible
+combinations of the observed values of the two predictor variables specified will be used 
+(see details).}
 
 \item{pred.type}{character string. Type of prediction to be plotted on z-axis.
 \code{pred.type = "response"} gives fitted values for continuous outputs and
 fitted probabilities for nominal outputs. \code{pred.type = "link"} gives fitted
 values for continuous outputs and linear predictor values for nominal outputs.}
+
+\item{newdata}{Optional \code{data.frame} in which to look for variables 
+with which to predict. If \code{NULL}, the \code{data.frame} used to fit the 
+original ensemble will be used.}
+
+\item{xlab}{character. Label to be printed on the x-axis. If \code{NULL},
+the first elements of the supplied \code{varnames} will be printed on the x-axis.}
+
+\item{ylab}{character. Label to be printed on the y-axis. If \code{NULL},
+the second element of the supplied \code{varnames} will be printed on the y-axis.}
+
+\item{main}{Title for the plot. If \code{NULL}, the name of the response
+will be printed.}
 
 \item{...}{Further arguments to be passed to \code{\link[graphics]{image}}, 
 \code{\link[graphics]{contour}} or \code{\link[graphics]{persp}} (depending on
@@ -64,26 +88,54 @@ datasets, package `plotmo` (Milborrow, 2019) provides more efficient functions
 for plotting partial dependence and also supports `pre` models.
 }
 \details{
+Partial dependence functions are described in section 8.1 of Friedman & 
+Popescu (2008).
+
 By default, partial dependence will be plotted for each combination
 of 20 values of the specified predictor variables. When \code{nvals = NULL} is
-specified a dependence plot will be created for every combination of the unique
-observed values of the two predictor variables specified. Therefore, using
-\code{nvals = NULL} will often result in long computation times, and / or
-memory allocation errors. Also, \code{\link{pre}} ensembles derived
-from training datasets that are very wide or long may result in long
-computation times and / or memory allocation errors. In such cases, reducing
-the values supplied to \code{nvals} will reduce computation time and / or
-memory allocation errors. When the nvals argument is supplied, values for the
-minimum, maximum, and nvals - 2 intermediate values of the predictor variable
-will be plotted. Furthermore, if none of the variables specified appears in
-the final prediction rule ensemble, an error will occur.
+specified, a dependence plot will be created for every combination of the unique
+observed values of the two specified predictor variables. If \code{NA} instead of
+a numeric value is specified for one of the predictor variables, all observed
+values for that variables will be used. Specifying \code{nvals = NULL} and 
+\code{nvals = c(NA, NA)} will yield the exact same result.
 
-See also section 8.1 of Friedman & Popescu (2008).
+High values, \code{NA} or \code{NULL} for \code{nvals} result in long 
+computation times and possibly memory problems. Also, \code{\link{pre}} 
+ensembles derived from training datasets that are very wide or long may 
+result in long computation times and/or memory allocation errors. 
+In such cases, reducing
+the values supplied to \code{nvals} will reduce computation time and/or
+memory allocation errors. 
+
+When numeric value(s) are specified for \code{nvals}, values for the
+minimum, maximum, and nvals - 2 intermediate values of the predictor variable
+will be plotted. 
+
+Alternatively, \code{newdata} can be specified to provide a different (smaller) 
+set of observations to compute partial dependence over.
+If \code{mi_pre} was used to derive the original rule ensemble, 
+\code{newdata = "mean.mi"} can be specified. This 
+will result in an average dataset being computed over the imputed datasets, 
+which are then used to compute partial dependence functions. This greatly 
+reduces the number of observations and thereby computation time.
+
+If none of the variables specified with argument \code{varnames} was
+selected for the final prediction rule ensemble, an error will be returned.
 }
 \examples{
-\donttest{set.seed(42)
-airq.ens <- pre(Ozone ~ ., data = airquality[complete.cases(airquality),])
-pairplot(airq.ens, c("Temp", "Wind"))}
+\donttest{airq <- airquality[complete.cases(airquality),]
+set.seed(42)
+airq.ens <- pre(Ozone ~ ., data = airq)
+pairplot(airq.ens, c("Temp", "Wind"))
+
+## For multinomial and mgaussian families, one PDP is created per category or outcome
+set.seed(42)
+airq.ens3 <- pre(Ozone + Wind ~ ., data = airq, family = "mgaussian")
+pairplot(airq.ens3, varnames = c("Day", "Month"))
+
+set.seed(42)
+iris.ens <- pre(Species ~ ., data = iris, family = "multinomial")
+pairplot(iris.ens, varname = c("Petal.Width", "Petal.Length"))}
 }
 \references{
 Friedman, J. H., & Popescu, B. E. (2008). Predictive learning 

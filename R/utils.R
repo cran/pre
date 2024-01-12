@@ -5,6 +5,7 @@
 delete_duplicates_complements <- function(
   rules, data, removecomplements = TRUE, removeduplicates = TRUE,
   return.dupl.compl = FALSE, sparse = FALSE, keep_rulevars = FALSE) {
+  
   ## Generate rule variables:
   rulevars <- if(sparse)
     .get_rules_mat_sparse(data, rules) else
@@ -128,23 +129,24 @@ delete_duplicates_complements <- function(
 }
 
 # see https://stackoverflow.com/a/51457395/5861244
-duplicated.dgCMatrix <- function (dgCMat, MARGIN) {
+duplicated.dgCMatrix <- function (x, incomparables = NULL, MARGIN, ...) {
+  ## incomparables = NULL added to match duplicated generic: function(x, incomparables, ...)
   MARGIN <- as.integer(MARGIN)
-  n <- nrow(dgCMat)
-  p <- ncol(dgCMat)
-  J <- rep(1:p, diff(dgCMat@p))
-  I <- dgCMat@i + 1
-  x <- dgCMat@x
+  n <- nrow(x)
+  p <- ncol(x)
+  J <- rep(1:p, diff(x@p))
+  I <- x@i + 1
+  X <- x@x
   if (MARGIN == 1L) {
     ## check duplicated rows
-    names(x) <- J
-    RowLst <- split(x, I)
+    names(X) <- J
+    RowLst <- split(X, I)
     is_empty <- setdiff(1:n, I)
     result <- duplicated.default(RowLst)
   } else if (MARGIN == 2L) {
     ## check duplicated columns
-    names(x) <- I
-    ColLst <- split(x, J)
+    names(X) <- I
+    ColLst <- split(X, J)
     is_empty <- setdiff(1:p, J)
     result <- duplicated.default(ColLst)
   } else {
@@ -238,17 +240,17 @@ list.rules <- function (x, i = NULL, removecomplements = TRUE,
       ret <- lapply(i, list.rules, x = x, simplify = FALSE)
     }
     
-    # Find the first rules. We will only keep one of these
+    ## Find the first rules. We will only keep one of these:
     
     ## TODO: If we apply non-negativity constraints,
     ## the rule that is kept should correlate positively
     ## with the outcome, if we apply negativity constraint,
-    ## the rule that is kep should correlate negatively with 
+    ## the rule that is kept should correlate negatively with 
     ## the response.
     ## I.e., if  'lower.limits = 0' or 'upper.limits = 0' was used in calling pre()
     ##
     ## Easier solution may be to just not remove first rule here
-    ## E..g, employ rm.firstrule argument (which is true by default)
+    ## E.g., employ rm.firstrule argument (which is true by default)
     if (removecomplements) {
       first_rules <- unique(sapply(ret, "[[", 1))
       first_rule_remove <- first_rules[2]

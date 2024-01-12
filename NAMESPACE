@@ -32,7 +32,9 @@ export("gpe_rules_pre")
 export("caret_pre_model")
 export("explain")
 export("rare_level_sampler")
-
+export("mi_pre")
+export("mi_mean")
+export("prune_pre")
 
 import("Formula")
 import("glmnet")
@@ -41,7 +43,6 @@ import("graphics")
 import("partykit")
 import("rpart")
 import("survival")
-
 
 importFrom("methods", "as", "slot")
 importFrom("utils", "head", "tail", "object.size", "capture.output", "setTxtProgressBar", "txtProgressBar")
