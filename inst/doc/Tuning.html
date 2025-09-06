@@ -144,6 +144,28 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; }
 
 
 
+<style type="text/css">
+
+div.csl-bib-body { }
+div.csl-entry {
+clear: both;
+}
+.hanging div.csl-entry {
+margin-left:2em;
+text-indent:-2em;
+}
+div.csl-left-margin {
+min-width:2em;
+float:left;
+}
+div.csl-right-inline {
+margin-left:2em;
+padding-left:1em;
+}
+div.csl-indent {
+margin-left: 2em;
+}
+</style>
 
 <style type="text/css">body {
 background-color: #fff;
@@ -353,7 +375,8 @@ model complexity. Next, we illustrate how to optimize predictive
 accuracy for a binary classification problem using package
 <strong><code>caret</code></strong>. We do not explain each argument in
 detail; readers are referred to the documentation of function
-<code>pre()</code> for that, or Fokkema (2020).</p>
+<code>pre()</code> for that, or <span class="citation">Fokkema
+(2020)</span>.</p>
 </div>
 <div id="tuning-parameters" class="section level2">
 <h2>Tuning parameters</h2>
@@ -365,7 +388,7 @@ require tuning):</p>
 <li><p><code>learnrate</code>: Carefully tuning this parameter is likely
 to be the most beneficial in terms of predictive accuracy. There are no
 rules of thumb on how complexity and predictive accuracy will be
-affected by setting this argument to higher or lower than the default of
+affected by setting this argument higher or lower than the default of
 0.01. In light of the default value of <code>ntrees = 500</code>, the
 default of 0.01 is likely a very good starting points. Somewhat higher
 and lower values may be tried; lower values are likely beneficial only
@@ -374,8 +397,8 @@ starting point would be to specify a grid search over
 <code>c(0.01, 0.05, 0.1)</code> or
 <code>c(0.005, 0.01, 0.025, 0.05, 0.1)</code>.</p></li>
 <li><p><code>maxdepth</code>: The default of three generates rules with
-at most 3 conditions, which are relatively easy to interpret. Somewhat
-higher or lower values may be preferred. Setting
+at most three conditions, which are relatively easy to interpret.
+Somewhat higher or lower values may be preferred. Setting
 `<code>maxdepth = 1</code> will yield a model with main effects of
 predictor variables only.</p></li>
 <li><p><code>sampfrac</code>: Depending on training sample size, values
@@ -417,7 +440,7 @@ argument to <code>lambda.min</code> may improve predictive accuracy but
 will also increase complexity of the final ensemble.</p>
 </div>
 <div id="tuning-parameters-using-package-caret" class="section level2">
-<h2>Tuning parameters using package caret</h2>
+<h2>Tuning parameters using package <code>caret</code></h2>
 <p>We first load the required libraries:</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(<span class="st">&quot;caret&quot;</span>)</span>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">library</span>(<span class="st">&quot;pre&quot;</span>)</span>
@@ -453,7 +476,7 @@ need not be specified (see next chunk).</p>
 <span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a>  <span class="fu">return</span>(<span class="fu">c</span>(<span class="at">AUCROC =</span> rocAUC, <span class="at">Brier =</span> brscore))</span>
 <span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>}</span></code></pre></div>
 <p>Next, we set up a control object for the <code>train()</code>
-function. Opinions may vary on what are the best setting for optimizing
+function. Opinions may vary on what the best setting is for optimizing
 tuning parameters on a training dataset. Here, we take a 10-fold cross
 validation approach. Often, 10 repeats of 10-fold cross validation
 should be preferred, to make results less dependent on a single choice
@@ -490,7 +513,7 @@ value for <code>ntrees</code> each time (example provided below). The
 same goes for other arguments of function <code>pre()</code> that are
 not part of the default tuning parameters of
 <strong><code>caret</code></strong>’s method <code>&quot;pre&quot;</code>.</p>
-<p>In this example, we focus on the (perhaps somewhat uninteresting, but
+<p>In this example, we focus on the (perhaps somewhat uninteresting but
 useful as an example) problem of predicting sex <code>sexo</code> from
 the <code>carrillo</code> data included in package
 <strong><code>pre</code></strong> (type <code>?carrillo</code> for
@@ -517,8 +540,8 @@ printed to the command line:</p>
 <span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>                  <span class="at">maximize =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
 <p>If your predictor variables contain one or more factors, it is best
 not to use the formula interface of function <code>train</code>. By
-default, <code>train</code> dummy codes all factors, which will be
-suboptimal for most tree-based methods. Then it is better to supply the
+default, <code>train</code> dummy codes all factors, which will be sub
+optimal for most tree-based methods. Then it is better to supply the
 predictors as a <code>data.frame</code> to argument <code>x</code>, and
 to supply the response (as a numeric or factor vector) to argument
 <code>y</code>. See also <code>?train</code>.</p>
@@ -641,18 +664,72 @@ the parameters optimizing predictive accuracy as measured by the Brier
 score. This will commonly be encountered: <code>pre</code>’s default
 settings prefer a sparser ensemble over an ensemble that perfectly
 optimizes predictive accuracy. Small differences in accuracy may often
-be swamped by real-world aspects of a data problem (Efron, 2020; Hand,
-2009).</p>
+be swamped by real-world aspects of a data problem (<span class="citation">Efron (2020)</span>; <span class="citation">Hand
+(2006)</span>).</p>
 </div>
-<div id="references" class="section level2">
-<h2>References</h2>
-<p>Efron, B. (2020). Prediction, estimation, and attribution.
-<em>International Statistical Review, 88</em>, S28-S59.</p>
-<p>Hand, D. J. (2006). Classifier technology and the illusion of
-progress. <em>Statistical Science, 21</em>(1), 1-14.</p>
-<p>Fokkema, M. (2020). Fitting Prediction Rule Ensembles with R package
-<strong><code>pre</code></strong>. <em>Journal of Statistical Software,
-92</em>, 1-30. </p>
+<div id="using-breimans-random-forests-for-rule-generation" class="section level1">
+<h1>Using Breiman’s random forests for rule generation</h1>
+<p>Instead of gradient boosting, random forests (or bagging) can be
+employed for rule generation. As discussed above, function
+<code>pre</code> allows to use a random-forest style approach to rule
+generation by specifying argument <code>mtry</code>. Yet, the original
+random forest algorithm employed CART trees. Such trees can be employed
+by function <code>pre</code> by specifying
+<code>tree.unbiased = FALSE</code>, which will invoke function
+<code>rpart</code> from the package of the same name for rule induction.
+However, <code>rpart</code> does not provide an <code>mtry</code> (or
+similar) argument, so specifying <code>tree.unbiased = FALSE</code> does
+not allow for specifying other than the default <code>mtry = Inf</code>.
+Alternatively, <code>randomForest = TRUE</code> can be specified in
+order to generate rules using the exact random-forest approach
+originally proposed by <span class="citation">Breiman (2001)</span>, as
+implemented in function <code>randomForest</code> from the package of
+the same name by <span class="citation">Liaw &amp; Wiener (2002)</span>.
+I have not carefully evaluated the effect on predictive performance, but
+<span class="citation">Nalenz &amp; Villani (2018)</span> reported
+better performance with gradient boosting than with random forests. They
+also report a marginally better performance by adding rules from a
+random forest to those generated by gradient boosting, yet the gains
+seem very marginal. Combining the two is not (yet) possible in function
+<code>pre</code>. In any case, specifying <code>tree.unbiased</code>
+will reduce computation time, and specifying <code>randomForest</code>
+even more so.</p>
+<p>Arguments <code>tree.unbiased</code> and <code>randomForest</code>
+cannot be tuned with <code>train</code>, so these arguments need to be
+passed directly to function <code>pre</code>, just like argument
+<code>ntrees</code> as shown above.</p>
+<div id="references" class="section level2 unnumbered">
+<h2 class="unnumbered">References</h2>
+<div id="refs" class="references csl-bib-body hanging-indent" line-spacing="2">
+<div id="ref-brei01" class="csl-entry">
+Breiman, L. (2001). Random forests. <em>Machine Learning</em>,
+<em>45</em>, 5–32. <a href="https://doi.org/10.1023/A:1010933404324">https://doi.org/10.1023/A:1010933404324</a>
+</div>
+<div id="ref-efron2020prediction" class="csl-entry">
+Efron, B. (2020). Prediction, estimation, and attribution.
+<em>International Statistical Review</em>, <em>88</em>(S1), S28–S59.
+https://doi.org/<a href="https://doi.org/10.1111/insr.12409">https://doi.org/10.1111/insr.12409</a>
+</div>
+<div id="ref-fokkema2020prediction" class="csl-entry">
+Fokkema, M. (2020). Fitting prediction rule ensembles with r package
+pre. <em>Journal of Statistical Software</em>, <em>92</em>(12), 1–30. <a href="https://doi.org/10.18637/jss.v092.i12">https://doi.org/10.18637/jss.v092.i12</a>
+</div>
+<div id="ref-hand2006classifier" class="csl-entry">
+Hand, D. J. (2006). <span class="nocase">Classifier Technology and the
+Illusion of Progress</span>. <em>Statistical Science</em>,
+<em>21</em>(1), 1–14. Retrieved from <a href="https://doi.org/10.1214/088342306000000060">https://doi.org/10.1214/088342306000000060</a>
+</div>
+<div id="ref-LiawyWien02" class="csl-entry">
+Liaw, A., &amp; Wiener, M. (2002). Classification and regression by
+randomForest. <em>R News</em>, <em>2</em>(3), 18–22. Retrieved from <a href="https://CRAN.R-project.org/doc/Rnews/">https://CRAN.R-project.org/doc/Rnews/</a>
+</div>
+<div id="ref-nalenz2018tree" class="csl-entry">
+Nalenz, M., &amp; Villani, M. (2018). Tree ensembles with rule
+structured horseshoe regularization. <em>The Annals of Applied
+Statistics</em>, <em>12</em>(4), 2379–2408. <a href="https://doi.org/10.1214/18-AOAS1157">https://doi.org/10.1214/18-AOAS1157</a>
+</div>
+</div>
+</div>
 </div>
 
 

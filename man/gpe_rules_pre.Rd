@@ -39,10 +39,12 @@ returns integer values. See also \code{\link{maxdepth_sampler}}.}
 \item{ntrees}{positive integer value. Number of trees to generate for the 
 initial ensemble.}
 
-\item{tree.control}{list with control parameters to be passed to the tree 
+\item{tree.control}{a \code{list} with control parameters to be passed to the tree 
 fitting function, generated using \code{\link[partykit]{ctree_control}},
-\code{\link[partykit]{mob_control}} (if \code{use.grad = FALSE}), or 
-\code{\link[rpart]{rpart.control}} (if \code{tree.unbiased = FALSE}).}
+\code{\link[partykit]{mob_control}} (if \code{use.grad = FALSE}), 
+\code{\link[rpart]{rpart.control}} (if \code{tree.unbiased = FALSE}). Or
+a list containing (n)one or more arguments that can be passed to function
+\code{\link[randomForest]{randomForest}} (if \code{randomForest = TRUE}.}
 
 \item{use.grad}{logical. Should gradient boosting with regression trees be
 employed when \code{learnrate > 0}? If \code{TRUE}, use trees fitted by 

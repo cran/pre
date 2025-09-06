@@ -144,6 +144,28 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; }
 
 
 
+<style type="text/css">
+
+div.csl-bib-body { }
+div.csl-entry {
+clear: both;
+}
+.hanging div.csl-entry {
+margin-left:2em;
+text-indent:-2em;
+}
+div.csl-left-margin {
+min-width:2em;
+float:left;
+}
+div.csl-right-inline {
+margin-left:2em;
+padding-left:1em;
+}
+div.csl-indent {
+margin-left: 2em;
+}
+</style>
 
 <style type="text/css">body {
 background-color: #fff;
@@ -346,11 +368,11 @@ prediction rule ensembles</h1>
 <div id="introduction" class="section level2">
 <h2>Introduction</h2>
 <p>To deal with missing data in parametric models, multiple imputation
-is the golden standard (Schafer &amp; Graham, 2002). With GLMs, the
-models fitted on each imputed dataset can then be pooled. For
-non-parametric methods and specifically prediction rule ensembles, the
-jury is still out on how to best deal with missing data. There are
-several possible approaches:</p>
+is the golden standard (<span class="citation">Schafer &amp; Graham
+(2002)</span>). With GLMs, the models fitted on each imputed dataset can
+then be pooled. For non-parametric methods and specifically prediction
+rule ensembles, the jury is still out on how to best deal with missing
+data. There are several possible approaches:</p>
 <ul>
 <li><p>Listwise deletion. Although the default in <code>pre()</code>, it
 is certainly the least favorable option.</p></li>
@@ -373,10 +395,11 @@ an optimal manner.</p></li>
 </ul>
 <p>An alternative, would be the Missing-In-Attributes approach for rule
 generation, followed by mean imputation for the final model. According
-to Josse et al. (2019), mean imputation and the Missing-In-Attributes
-approaches perform well from a prediction perspective and are
-computationally inexpensive. This will be implemented in future versions
-of package <strong><code>pre</code></strong>.</p>
+to <span class="citation">Josse, Prost, Scornet, &amp; Varoquaux
+(2019)</span>, mean imputation and the Missing-In-Attributes approaches
+perform well from a prediction perspective and are computationally
+inexpensive. This will be implemented in future versions of package
+<strong><code>pre</code></strong>.</p>
 <p>Below, we provide examples for the four approaches described
 above.</p>
 </div>
@@ -464,22 +487,27 @@ an experimental (!) version has been implemented in package
 <div id="stacking-imputed-datasets" class="section level3">
 <h3>Stacking imputed datasets</h3>
 <p>Function <code>mi_pre</code> implements a so-called <em>stacking</em>
-approach (see also Wood et al., 2008), where imputed datasets are
-combined into one large dataset. In addition to adjustments of the
-sampling procedures, adjustments to observation weight are made to
-counter the artificial inflation of sample size. Function
-<code>mi_pre</code> takes a list of imputed datasets as input data,
-because it is assumed imputation has already been performed.</p>
+approach (see also <span class="citation">Wood, White, &amp; Royston
+(2008)</span>), where imputed datasets are combined into one large
+dataset. In addition to adjustments of the sampling procedures,
+adjustments to observation weight are made to counter the artificial
+inflation of sample size. Function <code>mi_pre</code> takes a list of
+imputed datasets as input data, because it is assumed imputation has
+already been performed.</p>
 <p>Although the option to use the fraction of complete data for
 computing observation weight is provided through argument
 <code>compl_frac</code> of function <code>mi_pre</code>, users are not
-advised to use it. For example, Du et al. (2022) write: “An alternative
-weight specification, proposed in Wan et al. (2015), is <span class="math inline">\(o_i = \frac{f_i}{D}\)</span>, where <span class="math inline">\(f_i\)</span> is the number of observed predictors
-out of the total number of predictors for subject <span class="math inline">\(i\)</span> […] upweighting subjects with less
-missingness and downweighting subjects with more missingness can, in
-some sense, be viewed as making the optimization more like complete-case
-analysis, which might be problematic for Missing at Random (MAR) and
-Missing not at Random (MNAR) scenarios.”</p>
+advised to use it. For example, <span class="citation">Du et al.
+(2022)</span> write: “An alternative weight specification, proposed in
+Wan et al. (2015), is <span class="math inline">\(o_i =
+\frac{f_i}{D}\)</span>, where <span class="math inline">\(f_i\)</span>
+is the number of observed predictors out of the total number of
+predictors for subject <span class="math inline">\(i\)</span> […]
+upweighting subjects with less missingness and downweighting subjects
+with more missingness can, in some sense, be viewed as making the
+optimization more like complete-case analysis, which might be
+problematic for Missing at Random (MAR) and Missing not at Random (MNAR)
+scenarios.”</p>
 <p>We fit a rule ensemble to the imputed data using stacking:</p>
 <div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
 <span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>airq.ens.sta <span class="ot">&lt;-</span> <span class="fu">mi_pre</span>(Wind <span class="sc">~</span> . , <span class="at">data =</span> imp1)</span></code></pre></div>
@@ -513,10 +541,10 @@ arguments of functions <code>singleplot</code> or <code>pairplot</code>
 to speed up computation of partial dependence plots:</p>
 <div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a>newdata <span class="ot">&lt;-</span> <span class="fu">mi_mean</span>(imp1)</span>
 <span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a><span class="fu">singleplot</span>(airq.ens.sta, <span class="at">newdata =</span> newdata, <span class="at">varname =</span> <span class="st">&quot;Ozone&quot;</span>)</span></code></pre></div>
-<p><img src="data:image/png;base64,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" /><!-- --></p>
+<p><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASAAAAEgCAMAAAAjXV6yAAAASFBMVEUAAAAAADoAAGYAOpAAZrY6AAA6ADo6AGY6Ojo6kNtmAABmtrZmtv+QOgCQ2/+2ZgC2///bkDrb////tmb/25D//7b//9v////z5x0lAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAHb0lEQVR4nO2di3abOBRFaeO0Y9cJIdjh//+0IAG2pxFHEvdKAp+9ZrIyQdLFe/TEAqqOLFLlPoHSoSAABQEoCEBBAAoCUBCAggAUBKAgAAUBKAhAQQAKAlAQgIIAFASgIAAFASgIQEEACgJQEICCABQEoCAABQEoCEBBAAoCUBCAggAUBKAgAAUBKAhAQQAKAlAQgIIAFASgIAAFASgIQEEACgJQEICCABQEoCAABQEoCEBBAAoCUBCAggAUBKAgAAUBKAhAQQAKAlAQgIIAFASgIAAFASgIECbo660y/PxQOp3yCBLUVEf7Szv9sn9CBH29zVqal0+FkymREEHX03n6tX2aRsYaBAjsg8YqxD7IwfVkR7GnqT+cB0EoCBApqHGMYtVmUBaUqDg9KAhAQYC8ggKbeQ4SC/q+7ytZkYqgaZo44BrF/vefxSrSqUFfb2iN+k9xpSpSamJfb4fg4srsjLT6oLY6Lx7/vrgCFRU2zJdXiwoTVN4EiYIAFAQoTlBphgqZKEYGSkAxE8W4QPoUNFGcDxWlqKyJ4nSwIEflddL2cDGKChXUFdPSirge5EwsEnMd5dagroyGVrSgEhQVLqjL3tDKF5RZ0RYEZVW0DUEZFyAUJBWYgqQS6hRHQWnDKwSmIKmEOsVRUNrwCoEpSCqhTnHPIih8b6Ro+AhYg6QC24Qe33gJx41ML0ZEDbL3X7Q/3pPEjUwvRrig6Suvdffx7FjQdDPYujvBdixouhmsZg1yJLRfmjYLfdD1ZHqppY58z4LsULZUf4wg00fd3ZwZGTcyvRhK21+OkxpXV05Bl1cjyNWV71kQfmjAk9egGo7vdr596Kbuek3c6AxCxMyDfG5k7h31w5z7puddC1reGiUcNzqDEPFLjURxozMIET1R9MR5U69/EZEZhIhpYisud0RfMNuQoMRxleLLx6UgqYSGaTLp7K32KqifBPn0QZdf77Z/dk4q9yrIj/GSUd3/rB1zgr0K6quPxxh/tw6TWqxuSFAFLgZ1txp0eMp50NwDL1Qlc7lx6IiupydrYncsLuqHy60/FvzsXVC7XIEk40ZnECJCUNPbWf3ott0KqiXshMSNziBE+EQxcdzoDEKE1qBmvJaaLG50BiGirgcJONqzoJ7La+QzJOOvB+UypDQPkou7IocI8TPptPuDtiJoXIut76b3K2hdxQmPuyKHCJu55NpluqtuQ4LyKNqUoBzNbFuCMtShjQlKr2hzglIr2qCgLunzGDYpqEtYjbYqKJmhzQpKpWjDgtIoSixoxfUgV3kyBbkjiCdMXZyyoe0LUq5FOxDUqXZG+xCk2ND2IkitEikJgvdzKHwcnb5IRxB+CaTO/28FRSqCPF7hp9VniCtSEeTxEkjFYUd4gBRP2GWtQaZsycK1+iD0Ekjd+a+gIqVRDL4EUn0JJRVgN/OgfyMILa/FE2Yp7vsYEkG0BYntk45CQNHGrwd5BFxbgHjCLMUtRVoXav+CVipSElRX1cEsWF3bzdN+P7pCkdJEsZ//1MM2K7kHC6wkutfTW2rYZ3jlWGo4qEIJO9Hgxapdpi4vVqvhn2/OzPEH01Rsnm78BPPBzh41xx7blPnLmPPhY4CPpCjIuwY9q6BbH3S3rndEf05BvqPY8wrCxW2GTIJiCg08Bd3k4vkFCqUg2VOgoKzJxfMLFEpBsqdAQVmTi+cXKJSCZE9hD4L2BAUBKAhAQQAKAlAQgIIAFASgIAAFASgIQEEACgLIC2p9H7Fze8mCR5bL74+HwkEWmzwoggNxQcNX034vKTPPFvbMcj3ZLQFTSpBlTB4SwYW0IPultOthwQ9MGyA8srT2/pk5JcgyJg+J4ERakH21jWuP5wPNwTdLWx3NZ51TLmeZkgdEcCMuyNRqr7e41f9V5umWXlmsoCklzGIPBUVwIC3ItnSf9n49DVto6qNfFvPp5pQwi0keFsFBPkFj+p8faoLCIjjI2MRs+tezXhMLiuAgYydt0/9698oS0kl3j4I8IzjIN8zbs+4/iVeWNmSYf/DpG8FBxomiOeH66JelDZooTqNYSAQH8kuNxntWPzzE+uyZZWwzc0qQZUweEsEBF6sACgJQEICCABQEoCAABQEoCEBBAAoCUBCAggAUBKAgAAUBKAhAQQAKAlAQgIIAFASgIAAFASgIQEEACgJQEKA0QcOrXle+sVyWwgSZ5w1fXiXeqixEWYLGjc1i7+YWoCxB0x6n5uWzMY9BOtp3UB8HaX9OtvE1lcyr3/0oStBcc8bNTsOmubaXcj0d7Ktgm/Hfy2syQ4UJGrtnu3lu+Gl3z/XCjLz+L1Zi3IbMGAoW9PX28nlTZY71P2zlsn9OQWGC7pvY0JZGE72YWdD4kLanFHTfSY/9jKMGpaMsQWPLGWqSaWDdfR90vtWkhJQl6G6i2Iw15TaKWUH2QJ2sHhUmaF5qTK9ZOt/mQaMgMw9KNogVJ6g4KAhAQQAKAlAQgIIAFASgIAAFASgIQEEACgJQEICCABQEoCAABQEoCEBBAAoCUBCAggAUBKAgwF+dOXJXTtbqqQAAAABJRU5ErkJggg==" /><!-- --></p>
 <div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a><span class="fu">pairplot</span>(airq.ens.sta, <span class="at">newdata =</span> newdata, <span class="at">varnames =</span> <span class="fu">c</span>(<span class="st">&quot;Ozone&quot;</span>, <span class="st">&quot;Solar.R&quot;</span>))</span></code></pre></div>
 <pre><code>## Loading required namespace: interp</code></pre>
-<p><img src="data:image/png;base64,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" /><!-- --></p>
+<p><img src="data:image/png;base64,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" /><!-- --></p>
 </div>
 <div id="pooling" class="section level3">
 <h3>Pooling</h3>
@@ -532,7 +560,7 @@ several datasets contained in a list:</p>
 <p>We apply the new function:</p>
 <div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">43</span>)</span>
 <span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a>airq.agg <span class="ot">&lt;-</span> <span class="fu">pre.agg</span>(imp1, <span class="at">formula =</span> Wind <span class="sc">~</span> .)</span></code></pre></div>
-<p>Note that we can used the ellipsis (<code>...</code>) to pass
+<p>Note that we can use the ellipsis (<code>...</code>) to pass
 arguments to <code>pre</code> (see <code>?pre</code> for an overview of
 arguments that can be specified).</p>
 <p>We now define <code>print</code>, <code>summary</code>,
@@ -576,9 +604,9 @@ aggregated final PRE. That is, it returns:</p>
 <li><p>One averaged intercept;</p></li>
 <li><p>All rules and linear terms, with their coefficients scaled by the
 number of datasets;</p></li>
-<li><p>In presence of identical rules and linear terms, it aggregates
-those rules and their coefficients into one rule / term, and adds
-together the scaled coefficients.</p></li>
+<li><p>In the presence of identical rules and linear terms, it
+aggregates those rules and their coefficients into one rule / term, and
+adds together the scaled coefficients.</p></li>
 </ol>
 <p>Note that linear terms of the same predictors, which obtained
 different winsorizing points across imputed datasets will be retained
@@ -717,8 +745,9 @@ the cost of increased complexity:</p>
 <div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a><span class="fu">boxplot</span>(nterms, <span class="at">main =</span> <span class="st">&quot;Number of selected terms </span><span class="sc">\n</span><span class="st">per missing-data method&quot;</span>,</span>
 <span id="cb32-2"><a href="#cb32-2" tabindex="-1"></a>        <span class="at">cex.main =</span> .<span class="dv">8</span>)</span></code></pre></div>
 <p><img src="data:image/png;base64,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" /><!-- --></p>
-<p>In line with findings of Josse et al. (2019), we expect MIA to work
-better for rules than mean imputation. In future versions of package
+<p>In line with findings of <span class="citation">Josse et al.
+(2019)</span>, we expect MIA to work better for rules than mean
+imputation. In future versions of the package
 <strong><code>pre</code></strong>, we plan to implement MIA (for the
 rules) and combine it with mean imputation (for the linear terms).</p>
 </div>
@@ -727,9 +756,9 @@ rules) and combine it with mean imputation (for the linear terms).</p>
 <p>In case you obtained different results, these results were obtained
 using the following:</p>
 <div class="sourceCode" id="cb33"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div>
-<pre><code>## R version 4.3.1 (2023-06-16 ucrt)
+<pre><code>## R version 4.3.3 (2024-02-29 ucrt)
 ## Platform: x86_64-w64-mingw32/x64 (64-bit)
-## Running under: Windows 10 x64 (build 19045)
+## Running under: Windows 11 x64 (build 22631)
 ## 
 ## Matrix products: default
 ## 
@@ -746,46 +775,54 @@ using the following:</p>
 ## [1] stats     graphics  grDevices utils     datasets  methods   base     
 ## 
 ## other attached packages:
-## [1] pre_1.0.7   mice_3.16.0
+## [1] pre_1.0.8   mice_3.16.0
 ## 
 ## loaded via a namespace (and not attached):
-##  [1] sass_0.4.7         utf8_1.2.3         generics_0.1.3     tidyr_1.3.0       
-##  [5] shape_1.4.6        stringi_1.7.12     lattice_0.21-8     inum_1.0-5        
-##  [9] plotmo_3.6.2       lme4_1.1-35.1      digest_0.6.31      magrittr_2.0.3    
-## [13] mitml_0.4-5        evaluate_0.23      grid_4.3.1         iterators_1.0.14  
-## [17] mvtnorm_1.2-3      fastmap_1.1.1      foreach_1.5.2      jomo_2.7-6        
-## [21] jsonlite_1.8.4     glmnet_4.1-8       Matrix_1.6-2       nnet_7.3-19       
-## [25] backports_1.4.1    Formula_1.2-5      survival_3.5-5     purrr_1.0.1       
-## [29] fansi_1.0.4        codetools_0.2-19   jquerylib_0.1.4    cli_3.6.0         
-## [33] rlang_1.1.1        splines_4.3.1      plotrix_3.8-4      cachem_1.0.8      
-## [37] yaml_2.3.7         pan_1.9            tools_4.3.1        deldir_1.0-9      
-## [41] MatrixModels_0.5-3 earth_5.3.2        nloptr_2.0.3       minqa_1.2.6       
-## [45] dplyr_1.1.2        interp_1.1-4       boot_1.3-28.1      broom_1.0.5       
-## [49] rpart_4.1.19       vctrs_0.6.3        R6_2.5.1           lifecycle_1.0.4   
-## [53] stringr_1.5.1      libcoin_1.0-10     MASS_7.3-60        partykit_1.2-20   
-## [57] pkgconfig_2.0.3    pillar_1.9.0       bslib_0.5.1        TeachingDemos_2.12
-## [61] glue_1.6.2         Rcpp_1.0.10        highr_0.10         xfun_0.41         
-## [65] tibble_3.2.1       tidyselect_1.2.0   rstudioapi_0.15.0  knitr_1.45        
-## [69] htmltools_0.5.7    nlme_3.1-162       rmarkdown_2.25     compiler_4.3.1</code></pre>
+##  [1] sass_0.4.9         utf8_1.2.4         generics_0.1.3     tidyr_1.3.1       
+##  [5] shape_1.4.6.1      stringi_1.8.3      lattice_0.22-5     inum_1.0-5        
+##  [9] plotmo_3.6.3       lme4_1.1-35.4      digest_0.6.35      magrittr_2.0.3    
+## [13] mitml_0.4-5        evaluate_0.24.0    grid_4.3.3         iterators_1.0.14  
+## [17] mvtnorm_1.2-5      fastmap_1.1.1      foreach_1.5.2      jomo_2.7-6        
+## [21] jsonlite_1.8.8     glmnet_4.1-8       Matrix_1.6-5       nnet_7.3-19       
+## [25] backports_1.5.0    Formula_1.2-5      survival_3.5-8     purrr_1.0.2       
+## [29] fansi_1.0.6        codetools_0.2-19   jquerylib_0.1.4    cli_3.6.3         
+## [33] rlang_1.1.4        splines_4.3.3      plotrix_3.8-4      cachem_1.0.8      
+## [37] yaml_2.3.8         pan_1.9            tools_4.3.3        deldir_2.0-4      
+## [41] MatrixModels_0.5-3 earth_5.3.3        nloptr_2.1.1       minqa_1.2.7       
+## [45] dplyr_1.1.4        interp_1.1-6       boot_1.3-29        broom_1.0.6       
+## [49] rpart_4.1.23       vctrs_0.6.5        R6_2.5.1           lifecycle_1.0.4   
+## [53] stringr_1.5.1      libcoin_1.0-10     MASS_7.3-60.0.1    partykit_1.2-20   
+## [57] pkgconfig_2.0.3    pillar_1.9.0       bslib_0.7.0        glue_1.7.0        
+## [61] Rcpp_1.0.12        highr_0.10         xfun_0.43          tibble_3.2.1      
+## [65] tidyselect_1.2.1   rstudioapi_0.16.0  knitr_1.45         htmltools_0.5.8   
+## [69] nlme_3.1-164       rmarkdown_2.26     compiler_4.3.3</code></pre>
 </div>
-<div id="references" class="section level2">
-<h2>References</h2>
-<p>Du, J., Boss, J., Han, P., Beesley, L. J., Kleinsasser, M., Goutman,
-S.A., … &amp; Mukherjee, B. (2022). Variable selection with
-multiply-imputed datasets: choosing between stacked and grouped methods.
-<em>Journal of Computational and Graphical Statistics, 31</em>(4),
-1063-1075. </p>
-<p>Josse, J., Prost, N., Scornet, E., &amp; Varoquaux, G. (2019). On the
+<div id="references" class="section level2 unnumbered">
+<h2 class="unnumbered">References</h2>
+<div id="refs" class="references csl-bib-body hanging-indent" line-spacing="2">
+<div id="ref-du2022variable" class="csl-entry">
+Du, J., Boss, J., Han, P., Beesley, L. J., Kleinsasser, M., Goutman, S.
+A., … Mukherjee, B. (2022). Variable selection with multiply-imputed
+datasets: Choosing between stacked and grouped methods. <em>Journal of
+Computational and Graphical Statistics</em>, <em>31</em>(4), 1063–1075.
+<a href="https://doi.org/10.1080/10618600.2022.2035739">https://doi.org/10.1080/10618600.2022.2035739</a>
+</div>
+<div id="ref-josse2019consistency" class="csl-entry">
+Josse, J., Prost, N., Scornet, E., &amp; Varoquaux, G. (2019). On the
 consistency of supervised learning with missing values. <em>arXiv
-preprint arXiv:1902.06931</em>. <a href="https://arxiv.org/abs/1902.06931" class="uri">https://arxiv.org/abs/1902.06931</a></p>
-<p>Miles, A. (2016). Obtaining predictions from models fit to multiply
-imputed data. <em>Sociological Methods &amp; Research, 45</em>(1),
-175-185. </p>
-<p>Schafer, J. L., &amp; Graham, J. W. (2002). Missing data: our view of
-the state of the art. <em>Psychological Methods, 7</em>(2), 147. </p>
-<p>Wood, A. M., White, I. R., &amp; Royston, P. (2008). How should
-variable selection be performed with multiply imputed data?
-<em>Statistics in Medicine, 27</em>(17), 3227-3246. </p>
+Preprint arXiv:1902.06931</em>.
+</div>
+<div id="ref-schafer2002missing" class="csl-entry">
+Schafer, J. L., &amp; Graham, J. W. (2002). Missing data: Our view of
+the state of the art. <em>Psychological Methods</em>, <em>7</em>(2),
+147. https://doi.org/<a href="https://doi.org/10.1037/1082-989X.7.2.147">https://doi.org/10.1037/1082-989X.7.2.147</a>
+</div>
+<div id="ref-wood2008should" class="csl-entry">
+Wood, A. M., White, I. R., &amp; Royston, P. (2008). How should variable
+selection be performed with multiply imputed data? <em>Statistics in
+Medicine</em>, <em>27</em>(17), 3227–3246. https://doi.org/<a href="https://doi.org/10.1002/sim.3177">https://doi.org/10.1002/sim.3177</a>
+</div>
+</div>
 </div>
 
 
